@@ -1,0 +1,718 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ejecucion_bmad documento="09-ui-spec.md" pantalla="P-005" version="v1.0" fecha="2026-11-11" proyecto="ExpenseFlow AI">
+  <paso numero="1" agente="Prototipo Visual">
+    <prompt><![CDATA[
+<agente>
+Eres un desarrollador frontend senior. Tu trabajo es convertir un 
+wireframe textual en un prototipo visual interactivo.
+</agente>
+<contexto>
+Estoy prototipando la pantalla P-005 — Nuevo ingreso de ExpenseFlow AI.
+--- SCREEN SPEC --
+### P-005 — Nuevo ingreso
+
+| Campo | Valor |
+|---|---|
+| Propósito | Registrar el dinero recibido con su origen |
+| Actor | Usuario autenticado |
+| HU | HU-004, HU-011 |
+| Reglas | RN-026, RN-051 a RN-053, RN-056 a RN-061, RN-074, RN-104, RN-106, RN-107, RN-109, RN-110, RN-116, RN-168, RN-172 |
+| Layout | CMP-01 |
+
+**Campos (sin medio de pago):**
+
+| # | Etiqueta | Control | Valor inicial | Errores |
+|---|---|---|---|---|
+| 1 | «Monto» | CMP-05 | vacío | MSG-11, MSG-06 a MSG-09 |
+| 2 | «Origen» | CMP-06, 5 radios: Apoyo familiar, Trabajo, Prácticas preprofesionales, Trabajo independiente, Otros | ninguno | MSG-14 |
+| 2b | «Descripción (opcional)» | `<input type="text">` **sin** `maxlength` (el servidor rechaza 101 caracteres con MSG-15; no se trunca, DEC-32) | vacío | MSG-15 |
+| 3 | «Fecha» | `<input type="date">` | hoy de Lima | MSG-16, MSG-10, MSG-17 |
+
+**Campo «Descripción»:**
+
+- **Con JS:** el contenedor de «Descripción» está oculto (`hidden`) y su `<input>` con `disabled` mientras el origen no sea «Otros». Al elegir «Otros», `site.js` quita `hidden` y `disabled`; al elegir otro origen, los vuelve a poner (un campo deshabilitado no se envía, así nunca llega una descripción con otro origen). El cambio no mueve el foco.
+- **Sin JS:** el campo es visible siempre, con la ayuda «Solo si elegiste «Otros».» `[Propuesta]`. Si llega una descripción con un origen distinto de «Otros», el servidor MVC **la descarta** y guarda `SourceDescription = null`, sin error (DEC-66). La API no cambia: sigue respondiendo `400` con MSG-26.
+
+**Acciones:** «Guardar ingreso» (CMP-10) → `/dashboard` con MSG-50; «Cancelar» → `/dashboard`.
+
+**Wireframe (360 px), con «Otros» elegido:**
+
+```
+┌────────────────────────────────────────┐
+│ <h1> Nuevo ingreso                     │
+│ Monto                                  │
+│ ┌────┬───────────────────────────────┐ │
+│ │ S/ │ 80.00                         │ │
+│ └────┴───────────────────────────────┘ │
+│ <fieldset><legend> Origen              │ 1 columna (textos largos), 56 px por opción
+│ ┌────────────────────────────────────┐ │
+│ │ ○ Apoyo familiar                   │ │
+│ │ ○ Trabajo                          │ │
+│ │ ○ Prácticas preprofesionales       │ │
+│ │ ○ Trabajo independiente            │ │
+│ │ ● Otros                            │ │
+│ └────────────────────────────────────┘ │
+│ Descripción (opcional)                 │ aparece solo con «Otros» (con JS)
+│ ┌────────────────────────────────────┐ │
+│ │ Venta de libros                    │ │
+│ └────────────────────────────────────┘ │
+│ Hasta 100 caracteres.                  │ ayuda [Propuesta]
+│ Fecha                                  │
+│ ┌────────────────────────────────────┐ │
+│ │ 08/11/2026                         │ │
+│ └────────────────────────────────────┘ │
+│ ┌────────────────────────────────────┐ │
+│ │          Guardar ingreso           │ │
+│ └────────────────────────────────────┘ │
+│              Cancelar                  │
+└────────────────────────────────────────┘
+```
+
+**Estados:** inicial; errores (MSG-14 sin origen; MSG-11 / MSG-16 / MSG-10 en monto y fecha); enviando; «Otros» elegido tras un error (el servidor renderiza el campo visible y habilitado).
+
+--- Reglas comunes a todas las pantallas (09 §3.0) ---
+### 3.0 Reglas comunes a todas las pantallas
+
+Estas reglas aplican a todas las pantallas y no se repiten en cada ficha.
+
+**Documento y semántica (PRINCIPIO-001, PRINCIPIO-012)**
+
+- `<html lang="es-PE">`, `<meta name="viewport" content="width=device-width, initial-scale=1">` (sin `maximum-scale` ni `user-scalable=no`).
+- `<title>` único: «`<Nombre de la pantalla>` — ExpenseFlow AI».
+- Primer elemento enfocable: enlace «Saltar al contenido principal» (visible al recibir foco) que lleva a `<main id="contenido">`.
+- Landmarks: `<header>`, `<nav aria-label="Principal">` (solo con sesión), `<main id="contenido">`, `<footer>`.
+- Un único `<h1>` por pantalla. Sin saltos de nivel de encabezado.
+- Ningún texto en inglés visible ni en atributos accesibles (`aria-label`, `title`, `alt`, `placeholder`).
+
+**Formularios (PRINCIPIO-012, ADR-006)**
+
+- `<form method="post" novalidate>` con el token antiforgery de Razor.
+- Cada campo usa CMP-03: `<label for>` visible siempre (nunca solo `placeholder`).
+- Error de un campo: texto bajo el campo, con icono SVG decorativo (`aria-hidden="true"`) **y** el texto del mensaje; el campo recibe `aria-invalid="true"` y `aria-describedby` apunta al `id` del error (y al de la ayuda, si hay). El borde rojo nunca es la única señal.
+- Si hay errores de campo, el formulario muestra arriba CMP-04 y el **primer campo con error** lleva el atributo `autofocus` (lo pone Razor, funciona sin JS). CMP-04 no recibe el foco (DEC-78).
+- **Errores que no son de un campo** (MSG-02, MSG-21, MSG-22): se muestran en un bloque propio sobre el formulario, con `role="alert"` y estilo `--ef-danger-bg`, sin CMP-04 y sin `aria-invalid` en los campos (DEC-80). Si además hay errores de campo, se muestran ambos.
+- Todo botón de envío de formulario usa CMP-10 (DEC-74).
+- Tras un error, el servidor vuelve a mostrar lo que el usuario escribió (salvo contraseñas).
+- Los campos de radio se agrupan en `<fieldset>` con `<legend>`; el error del grupo se asocia al `<fieldset>` con `aria-describedby`.
+
+**Mensajes de confirmación (RN-172)**
+
+- Tras guardar o eliminar, la página de destino muestra **una sola vez** la confirmación (MSG-49 a MSG-53), al inicio de `<main>`, en un bloque con `role="status"`, estilo `--ef-success-bg` / `--ef-success-text` y un icono decorativo. Llega por TempData: al recargar, ya no aparece.
+- El bloque no recibe el foco ni se cierra solo; desaparece en la siguiente navegación.
+
+**Mejora progresiva (DP-4)**
+
+- Toda pantalla funciona igual sin JavaScript, salvo: deshabilitar el botón al enviar (RN-131, RN-168), mostrar u ocultar «Descripción» en ingresos y el diálogo de eliminación. Cada uno tiene su comportamiento sin JS documentado en su ficha.
+- `site.js` se carga con `defer` al final del `<body>`.
+
+**Tamaños mínimos (WCAG 2.2, 2.5.8)**
+
+- Toda área interactiva mide al menos 44 × 44 px (el mínimo AA es 24 × 24; se usa 44 por el contexto Android).
+- El foco es siempre visible (token `--ef-focus-ring`) y no queda tapado por la cabecera (2.4.11): la cabecera **no es fija** (`position: static`).
+
+**Montos**
+
+- Columna o bloque de montos con `font-variant-numeric: tabular-nums` y alineado a la derecha en listas.
+- El tipo de movimiento siempre se dice en texto («Gasto» / «Ingreso»), no solo con color.
+
+--- Componentes que usa la pantalla ---
+### CMP-01 — Layout autenticado
+
+**Propósito:** marco común de las pantallas con sesión; da acceso a las secciones y a «Cerrar sesión».
+**HU:** HU-002B.
+
+**Datos:** ninguno financiero. Puede mostrar el correo del usuario `[Propuesta]`; nunca su contraseña.
+
+**Acciones:**
+
+| Acción | Elemento | Destino |
+|---|---|---|
+| Ir al dashboard | Enlace «Inicio» y la marca «ExpenseFlow AI» | `/dashboard` |
+| Ir a la lista | Enlace «Movimientos» | `/transactions` |
+| Ir al presupuesto | Enlace «Presupuesto» | `/budgets/create` si no hay presupuesto del mes; `/budgets/edit` si lo hay (lo decide el servidor) |
+| Cerrar sesión | `<form method="post" action="/account/logout">` con botón «Cerrar sesión» y token antiforgery | P-002 (DEC-63). Con la sesión ya expirada, también P-002, sin error (RN-177) |
+
+**Reglas:** RN-097, RN-140 (`Cache-Control: no-store`, lo aplica el servidor), RN-177.
+
+**Wireframe (360 px):**
+
+```
+┌────────────────────────────────────────┐
+│ [Saltar al contenido principal]  ← solo visible con foco
+├────────────────────────────────────────┤ <header> fondo --ef-color-primary
+│ ExpenseFlow AI            [Cerrar sesión]│ marca: enlace a /dashboard (texto blanco, 1.125rem, 700)
+│                                         │ botón: btn-outline-light, 44 px de alto
+├────────────────────────────────────────┤ <nav aria-label="Principal"> fondo --ef-color-surface
+│  Inicio  │ Movimientos │ Presupuesto   │ 3 enlaces en fila, cada uno 1/3 del ancho, 48 px de alto
+│  ▔▔▔▔▔▔                                │ el activo: aria-current="page", texto 700 y borde inferior 3 px primario
+├────────────────────────────────────────┤
+│ <main id="contenido">                  │ container, padding lateral 16 px
+│   …contenido de la pantalla…           │
+├────────────────────────────────────────┤ <footer> texto --ef-color-text-muted, 0.875rem
+│ Aplicación académica con datos         │
+│ ficticios. Los saldos son calculados   │
+│ según tus registros.                   │ [Propuesta] (PRINCIPIO-006, PRINCIPIO-009)
+└────────────────────────────────────────┘
+```
+
+**Escritorio (≥ 768 px):** cabecera y navegación en una sola franja: marca a la izquierda, los 3 enlaces en el centro, «Cerrar sesión» a la derecha. Contenido en `container` (máx. 1140 px).
+
+**Sin JavaScript:** igual. **No** se usa el componente `collapse` («hamburguesa») de Bootstrap, porque depende de JS; con 3 enlaces cabe en 360 px.
+
+### CMP-03 — Campo con etiqueta, ayuda y error
+
+**Usado en:** todos los formularios. **HU:** HU-001, HU-003, HU-004, HU-007. **Reglas:** RN-116.
+
+```html
+<div class="ef-field">
+  <label for="Amount" class="form-label">Monto</label>
+  <input id="Amount" name="Amount" class="form-control"
+         aria-describedby="Amount-help Amount-error" aria-invalid="true">
+  <p id="Amount-help" class="ef-help">…</p>          <!-- solo si hay ayuda -->
+  <p id="Amount-error" class="ef-error">              <!-- solo si hay error -->
+    <svg aria-hidden="true" …></svg> El monto debe tener como máximo dos decimales.
+  </p>
+</div>
+```
+
+| Parte | Regla |
+|---|---|
+| Etiqueta | `<label for>` visible siempre, 1rem / 600. Nunca se reemplaza por `placeholder` |
+| Ayuda | Opcional, bajo el campo, 0.875rem `--ef-color-text-muted`, con `id="<Campo>-help"` |
+| Error | Bajo la ayuda, `--ef-color-danger`, icono decorativo + texto del MSG, con `id="<Campo>-error"`. Solo se muestra el primer error del campo según el orden de su regla |
+| `aria-describedby` | Lista la ayuda y el error presentes, en ese orden |
+| `aria-invalid` | `true` solo si el campo tiene error |
+| Borde | 1 px `--ef-color-border`; con error, 2 px `--ef-color-danger` (nunca es la única señal) |
+| Grupo de radios | El mismo patrón sobre el `<fieldset>` (CMP-06) |
+
+### CMP-04 — Resumen de errores
+
+```
+┌ div role="alert" class="ef-error-summary" ──────────────┐  fondo --ef-danger-bg, borde izq. 4 px
+│ ⚠ Revisa los datos ingresados.                          │  MSG-44, 600
+│   • MSG-11  ← enlace a #Amount                          │  lista de enlaces a cada campo con error
+│   • MSG-12  ← enlace a #Category-legend                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+- Sin `tabindex`: el foco va al primer campo con error, no al resumen (DEC-78). `role="alert"` hace que el lector de pantalla lo anuncie al cargar.
+- Solo agrupa errores de campo; los que no son de un campo van en su propio bloque (§3.0, DEC-80).
+
+### CMP-05 — Campo Monto
+
+- `<input type="text" inputmode="decimal" autocomplete="off" spellcheck="false">` (no `type="number"`: no admite la coma en todos los navegadores y oculta el texto original, que el servidor necesita para RN-104).
+- Prefijo «S/» como `input-group-text` con `aria-hidden="true"`; la etiqueta es «Monto» y la ayuda menciona los soles.
+- Texto a 1.25rem para lectura cómoda; alineado a la izquierda.
+- Sin formateo automático mientras se escribe (no hay JS de máscara).
+
+### CMP-06 — Grupo de opciones en mosaico
+
+- `<fieldset>` + `<legend>` visible (1rem, 600).
+- Cada opción: `<label class="ef-choice">` que envuelve un `<input type="radio" class="ef-choice__input">` **visible** (no `display:none`, para conservar el foco y el anuncio nativo) y el texto.
+- Navegación con flechas dentro del grupo (comportamiento nativo de radios); `Tab` entra y sale del grupo.
+- Estado seleccionado: borde 2 px `--ef-color-primary`, fondo `--ef-primary-subtle`, texto 600 y el radio marcado. Así el estado no depende solo del color.
+- Foco: `--ef-focus-ring` sobre el mosaico completo (`:has(:focus-visible)`; si el navegador no soporta `:has`, el anillo queda en el radio).
+
+### CMP-10 — Botón de envío con estado «enviando»
+
+- Botón `<button type="submit" data-disable-on-submit data-submitting-text="…">` con texto de reposo (ADR-006, punto 3). `site.js` solo actúa sobre botones con `data-disable-on-submit`.
+- `site.js`: en el evento `submit` del formulario, si no hay otro envío en curso, pone `disabled` y `aria-disabled="true"`, cambia el texto al de envío y escribe el mismo texto en una región `aria-live="polite"` del formulario. Un segundo `submit` se cancela con `preventDefault()`.
+- `pageshow` con `event.persisted` (volver con «Atrás» desde la caché del navegador) restaura el botón.
+- Lo exigen RN-131 y RN-168; en P-001, P-002, P-009 y P-010 lo aplica DEC-74.
+
+| Formulario | Texto en reposo | Texto al enviar |
+|---|---|---|
+| P-001 | «Crear cuenta» | «Creando cuenta…» `[Propuesta]` |
+| P-002 | «Iniciar sesión» | «Iniciando sesión…» `[Propuesta]` |
+| P-004 | «Guardar gasto» | «Guardando…» `[Propuesta]` |
+| P-005 | «Guardar ingreso» | «Guardando…» `[Propuesta]` |
+| P-007 | «Guardar cambios» | «Guardando…» `[Propuesta]` |
+| P-009 | «Guardar presupuesto» | «Guardando…» `[Propuesta]` |
+| P-010 | «Guardar cambios» | «Guardando…» `[Propuesta]` |
+| P-003 IA | «Generar resumen del mes» | «Generando resumen…» (HU-010A) |
+--- DESIGN TOKENS --
+## 4. Design tokens
+
+Los tokens se definen como variables CSS en `wwwroot/css/site.css`, cargado **después** de `bootstrap.min.css`. Los que tienen equivalente en Bootstrap se asignan también a `--bs-*`.
+
+### 4.1 Colores
+
+Todos los contrastes están calculados con la fórmula de WCAG 2.2.
+
+| Token | Valor | Uso | Contraste verificado |
+|---|---|---|---|
+| `--ef-color-primary` | `#0B5C8A` | Botones primarios, enlaces, cabecera, barra normal | Blanco sobre él 7.21:1; sobre `--ef-color-bg` 6.72:1 |
+| `--ef-color-primary-hover` | `#084A6F` | Hover y activo del primario | Blanco sobre él 9.46:1 |
+| `--ef-primary-subtle` | `#E8F2F9` | Fondo de opción seleccionada, aviso informativo | `#0B4F75` sobre él 7.74:1 |
+| `--ef-color-secondary` | `#475467` | Botones secundarios, insignias «Gasto»/«Ingreso» | Blanco sobre él 7.69:1 |
+| `--ef-color-accent` | `#0F6E5C` | Borde del bloque de IA, detalles de marca | Sobre blanco 6.17:1 |
+| `--ef-color-bg` | `#F5F7FA` | Fondo de página | — |
+| `--ef-color-surface` | `#FFFFFF` | Tarjetas, formularios, diálogos | — |
+| `--ef-color-text` | `#1A1F29` | Texto principal | Sobre blanco 16.51:1; sobre fondo 15.38:1 |
+| `--ef-color-text-muted` | `#4B5565` | Ayudas, leyendas, pie | Sobre blanco 7.54:1; sobre fondo 7.02:1 |
+| `--ef-color-border` | `#6B7280` | Bordes de campos, mosaicos y barra (componentes) | Sobre blanco 4.83:1 (≥ 3:1, WCAG 1.4.11) |
+| `--ef-color-divider` | `#E4E8EE` | Separadores decorativos y pista de la barra | Decorativo; no transmite información |
+| `--ef-color-danger` | `#B42318` | Texto de error, saldo negativo | Sobre blanco 6.57:1 |
+| `--ef-danger-bg` / `--ef-danger-text` | `#FEF0EE` / `#912018` | Aviso del 100 %, resumen de errores | 7.80:1 |
+| `--ef-warning-bg` / `--ef-warning-text` | `#FFF4E0` / `#7A3E00` | Aviso del 80 %, MSG-23 | 7.66:1 |
+| `--ef-success-bg` / `--ef-success-text` | `#ECF7EF` / `#1F6E37` | Confirmaciones MSG-49 a MSG-53 (RN-172) | 5.72:1 |
+| `--ef-info-bg` / `--ef-info-text` | `#E8F2F9` / `#0B4F75` | Aviso de datos ficticios, MSG-48 | 7.74:1 |
+| `--ef-progress-normal` | `#0B5C8A` | Barra < 80 % | Sobre la pista 5.86:1 |
+| `--ef-progress-warning` | `#B45309` | Barra 80 %–<100 % | Sobre la pista 4.08:1 (≥ 3:1) |
+| `--ef-progress-danger` | `#B42318` | Barra ≥ 100 % | Sobre la pista 5.35:1 |
+| `--ef-focus-ring` | `0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A` | Indicador de foco (doble anillo: visible sobre fondos claros y sobre la cabecera azul) | Azul sobre fondo 6.72:1 |
+
+**Reglas de uso del color:**
+
+- Sin modo oscuro en el MVP: `color-scheme: light` en `:root`.
+- El rojo, el ámbar y el verde nunca son la única señal: siempre van con texto (y un icono decorativo).
+- Los importes se escriben en `--ef-color-text`, salvo el saldo negativo (`--ef-color-danger` + texto).
+
+### 4.2 Tipografía
+
+| Token | Valor |
+|---|---|
+| `--ef-font-family` | `system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif` (Roboto en Android) |
+| `--ef-font-numeric` | `font-variant-numeric: tabular-nums` en importes, fechas y porcentajes |
+| Tamaño base | `16px` (`1rem`); los campos nunca bajan de 16 px (evita el zoom automático en móviles) |
+| Interlineado | `1.5` en general, `1.6` en el texto de la IA |
+
+| Estilo | Móvil | ≥ 768 px | Peso | Uso |
+|---|---|---|---|---|
+| `h1` | 1.5rem | 1.75rem | 700 | Título de pantalla |
+| `h2` | 1.125rem | 1.25rem | 600 | Título de sección |
+| Importe destacado | 1.75rem | 2rem | 700 | Saldo del mes |
+| Importe secundario | 1.25rem | 1.25rem | 700 | Saldo acumulado |
+| Cuerpo | 1rem | 1rem | 400 | Texto, valores |
+| Etiqueta | 1rem | 1rem | 600 | `<label>`, `<legend>` |
+| Pequeño | 0.875rem | 0.875rem | 400 | Ayudas, leyendas, pie |
+
+El texto debe seguir siendo legible con zoom al 200 % y con espaciado de texto aumentado (WCAG 1.4.4, 1.4.12): sin alturas fijas en contenedores de texto.
+
+### 4.3 Espaciado, formas y tamaños
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--ef-space-1` … `--ef-space-6` | 4, 8, 12, 16, 24, 32 px | Escala de márgenes y padding |
+| Gutter lateral | 16 px | Contenedor en móvil |
+| `--ef-radius` | 0.5rem (8 px) | Tarjetas, campos, botones, mosaicos |
+| `--ef-radius-sm` | 0.25rem | Insignias |
+| Sombra de tarjeta | `0 1px 2px rgba(16, 24, 40, .08)` | Solo tarjetas |
+| Ancho máx. de formularios | 560 px | P-004, P-005, P-007, P-009, P-010 |
+| Ancho máx. de autenticación | 440 px | P-001, P-002 |
+| Contenedor del dashboard | 1140 px | P-003, P-006 |
+
+| Componente | Alto mínimo | Notas |
+|---|---|---|
+| Botón primario de formulario | 56 px | Ancho completo en móvil |
+| Botón normal / enlace de navegación | 48 px | |
+| Botón de fila («Editar», «Eliminar») | 44 px | `min-width: 44px` |
+| Campo de texto / fecha | 48 px (Monto: 56 px) | Padding horizontal 12 px |
+| Mosaico de opción | 56 px | |
+| Casilla de verificación | 24 × 24 px dentro de un área clicable de 44 px | |
+| Barra de progreso | 16 px | |
+| Fila de movimiento | 56 px | |
+
+### 4.4 Puntos de quiebre
+
+Los de Bootstrap 5, diseñando primero para 360 px (RC-1, T4):
+
+| Nombre | Desde | Cambios principales |
+|---|---|---|
+| base | 0 (diseño a 360 px) | Una columna; botones a ancho completo |
+| `sm` | 576 px | Categorías en 3 columnas; filas de movimiento en una línea |
+| `md` | 768 px | Cabecera y navegación en una franja |
+| `lg` | 992 px | Dashboard en dos columnas |
+
+### 4.5 Ejemplo de `site.css` (cabecera de tokens)
+
+```css
+:root {
+  color-scheme: light;
+  --ef-color-primary: #0B5C8A;
+  --ef-color-primary-hover: #084A6F;
+  --ef-primary-subtle: #E8F2F9;
+  --ef-color-secondary: #475467;
+  --ef-color-accent: #0F6E5C;
+  --ef-color-bg: #F5F7FA;
+  --ef-color-surface: #FFFFFF;
+  --ef-color-text: #1A1F29;
+  --ef-color-text-muted: #4B5565;
+  --ef-color-border: #6B7280;
+  --ef-color-divider: #E4E8EE;
+  --ef-color-danger: #B42318;
+  --ef-danger-bg: #FEF0EE;   --ef-danger-text: #912018;
+  --ef-warning-bg: #FFF4E0;  --ef-warning-text: #7A3E00;
+  --ef-success-bg: #ECF7EF;  --ef-success-text: #1F6E37;
+  --ef-info-bg: #E8F2F9;     --ef-info-text: #0B4F75;
+  --ef-progress-normal: #0B5C8A;
+  --ef-progress-warning: #B45309;
+  --ef-progress-danger: #B42318;
+  --ef-focus-ring: 0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A;
+  --ef-radius: .5rem;
+
+  /* Puente con Bootstrap 5 */
+  --bs-primary: var(--ef-color-primary);
+  --bs-primary-rgb: 11, 92, 138;
+  --bs-body-bg: var(--ef-color-bg);
+  --bs-body-color: var(--ef-color-text);
+  --bs-border-color: var(--ef-color-border);
+  --bs-border-radius: var(--ef-radius);
+  --bs-link-color: var(--ef-color-primary);
+  --bs-link-hover-color: var(--ef-color-primary-hover);
+  --bs-body-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+}
+.btn-primary {
+  --bs-btn-bg: var(--ef-color-primary);
+  --bs-btn-border-color: var(--ef-color-primary);
+  --bs-btn-hover-bg: var(--ef-color-primary-hover);
+  --bs-btn-hover-border-color: var(--ef-color-primary-hover);
+  --bs-btn-active-bg: var(--ef-color-primary-hover);
+}
+:focus-visible { outline: none; box-shadow: var(--ef-focus-ring); }
+.ef-amount { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+```
+--- REGLAS DE NEGOCIO RELEVANTES --
+**RN-026** | Categoría: Cálculo | Prioridad: MUST | Fuente: PRINCIPIO-004 · Alcance M4
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE calcular el restante del presupuesto como presupuesto del mes − total de gastos del mes.
+
+✅ **Ejemplo:** Presupuesto de 2026-11: S/ 600.00. Gastos: S/ 450.00. Restante del presupuesto: S/ 150.00.
+
+❌ **Contraejemplo:** El restante del presupuesto se calcula restando también los ingresos, o lo calcula el modelo de IA.
+
+> El valor se conserva internamente con su signo. Cuando es negativo, se presenta según RN-071 a RN-073.
+
+**RN-051** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-01 · PRINCIPIO-003
+
+Patrón EARS: Unwanted
+
+SI el monto de un movimiento es menor que S/ 0.01, ENTONCES el sistema DEBE rechazar el movimiento.
+
+✅ **Ejemplo:** Se aceptan los gastos de S/ 0.01 y de S/ 150.50.
+
+❌ **Contraejemplo:** Se acepta un gasto de S/ 0.00 o un ingreso de S/ -50.00.
+
+> Mensaje: MSG-07.
+
+**RN-052** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-01
+
+Patrón EARS: Unwanted
+
+SI el monto de un movimiento es mayor que S/ 100,000.00, ENTONCES el sistema DEBE rechazar el movimiento.
+
+✅ **Ejemplo:** Se acepta un ingreso de S/ 100,000.00.
+
+❌ **Contraejemplo:** Se acepta un ingreso de S/ 100,000.01.
+
+> Mensaje: MSG-08.
+
+**RN-053** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-02 · DEC-30
+
+Patrón EARS: Unwanted
+
+SI el monto ingresado de un movimiento o de un presupuesto tiene más de 2 decimales significativos, ENTONCES el sistema DEBE rechazarlo.
+
+✅ **Ejemplo:** En un formulario se aceptan `12.3` y `12.34`. En la API, que recibe un número JSON, también se acepta `12.340`, porque el cero final no es significativo, y se guarda como 12.34.
+
+❌ **Contraejemplo:** Se acepta `12.345` o `12.999`, o un presupuesto de `600.555`.
+
+> En los formularios, el texto se valida antes con RN-104, que solo admite hasta 2 dígitos tras el separador: `12.340` escrito en un formulario se rechaza con MSG-09.
+>
+> **Sugerencia:** `amount * 100 == decimal.Truncate(amount * 100)`.
+
+**RN-056** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-01
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE determinar si un movimiento es ingreso o gasto únicamente por su tipo.
+
+✅ **Ejemplo:** Un gasto de S/ 45.00 se guarda como `Type = Expense`, `Amount = 45.00`.
+
+❌ **Contraejemplo:** Un gasto se guarda como `Amount = -45.00` para distinguirlo de un ingreso.
+
+**RN-057** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-04
+
+Patrón EARS: Unwanted
+
+SI la fecha de un movimiento es posterior a la fecha actual en la zona horaria `America/Lima`, ENTONCES el sistema DEBE rechazar el movimiento.
+
+✅ **Ejemplo:** El 2026-11-08 a las 23:30 (hora de Lima) se acepta un gasto con fecha `2026-11-08`.
+
+❌ **Contraejemplo:** En el mismo instante se acepta un gasto con fecha `2026-11-09`, porque en UTC ya es 2026-11-09.
+
+> Mensaje: MSG-10. Límite hacia el pasado: RN-109.
+
+**RN-058** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-13
+
+Patrón EARS: Unwanted
+
+SI el usuario guarda un ingreso sin origen, ENTONCES el sistema DEBE rechazar el ingreso.
+
+✅ **Ejemplo:** Un ingreso de S/ 600.00 con origen «Apoyo familiar» se acepta.
+
+❌ **Contraejemplo:** Un ingreso de S/ 600.00 sin origen se guarda con `Source = null`.
+
+> Mensaje: MSG-14.
+
+**RN-059** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-13
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE restringir el origen de un ingreso a uno de estos valores: Apoyo familiar, Trabajo, Prácticas preprofesionales, Trabajo independiente, Otros.
+
+✅ **Ejemplo:** Un ingreso de S/ 350.00 del 2026-11-05 se registra con el origen «Prácticas preprofesionales».
+
+❌ **Contraejemplo:** La API acepta un ingreso con el origen «Herencia».
+
+> Identificadores internos: `FamilySupport`, `Job`, `Internship`, `Freelance`, `Other`.
+
+**RN-060** | Categoría: UX | Prioridad: MUST | Fuente: DEC-13
+
+Patrón EARS: State-driven
+
+MIENTRAS el origen seleccionado de un ingreso sea «Otros», el sistema DEBE mostrar el campo opcional «Descripción».
+
+✅ **Ejemplo:** El usuario elige «Otros»; aparece «Descripción», y el ingreso se guarda aunque ese campo quede vacío.
+
+❌ **Contraejemplo:** Con «Otros», el campo no aparece, o el ingreso no se puede guardar con la descripción vacía.
+
+**RN-061** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-13 · DEC-32
+
+Patrón EARS: Unwanted
+
+SI la descripción del origen de un ingreso supera 100 caracteres, ENTONCES el sistema DEBE rechazar el ingreso.
+
+✅ **Ejemplo:** Se acepta una descripción de exactamente 100 caracteres.
+
+❌ **Contraejemplo:** Se acepta una de 101 caracteres, o se guarda truncada a 100 sin avisar.
+
+> Mensaje: MSG-15.
+>
+> **Motivo:** rechazar en lugar de truncar sigue el criterio de DEC-02: no alterar en silencio lo que ingresa el usuario.
+
+**RN-074** | Categoría: Cálculo | Prioridad: MUST | Fuente: DEC-05 · PRINCIPIO-004
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE calcular el saldo del mes como total de ingresos del mes − total de gastos del mes.
+
+✅ **Ejemplo:** 2026-11: ingresos S/ 600.00, gastos S/ 495.00, saldo del mes S/ 105.00.
+
+❌ **Contraejemplo:** El saldo del mes se muestra como S/ 155.00 porque incluye los movimientos de 2026-10.
+
+**RN-097** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-48
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario pulsa «Cerrar sesión», el sistema DEBE eliminar la cookie de autenticación del navegador.
+
+✅ **Ejemplo:** Tras cerrar sesión, el navegador ya no tiene la cookie: `GET /dashboard` redirige a la página de inicio de sesión y `GET /api/dashboard` responde `401`.
+
+❌ **Contraejemplo:** Tras cerrar sesión, el navegador conserva la cookie y el usuario puede seguir registrando gastos.
+
+> Después de cerrar sesión se muestra la página de inicio de sesión. Que el botón «Atrás» no muestre datos se garantiza con RN-140.
+>
+> **Limitación aceptada (DEC-48):** la cookie es autocontenida. Una copia capturada antes del cierre sigue siendo válida hasta su expiración (RN-098). Se acepta en el MVP porque solo hay datos ficticios (PRINCIPIO-006).
+
+> Si la sesión ya no es vigente al pulsar «Cerrar sesión», se aplica RN-177.
+
+**RN-104** | Categoría: Registro | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Unwanted
+
+SI el texto ingresado en un formulario como monto de un movimiento o de un presupuesto no consiste en dígitos seguidos, opcionalmente, de un único separador decimal (punto o coma) y más dígitos, ENTONCES el sistema DEBE rechazarlo.
+
+✅ **Ejemplo:** Se aceptan `3.50` y `3,50` (ambos S/ 3.50), `3`, `1250.5` y ` 12,50 ` (los espacios al inicio y al final se ignoran).
+
+❌ **Contraejemplo:** Se aceptan `1,250.50`, `1.250,50`, `S/ 12`, `-5`, `.50`, `12.`, `12.5.0` o `١٢` (dígitos arábigo-índicos); o `3,50` se interpreta como S/ 350.00.
+
+> **Orden de validación** (cada paso se detiene en el primer error):
+> 0. Se quitan los espacios exteriores. Si el texto queda vacío → MSG-11 (o MSG-25 si es un presupuesto).
+> 1. Patrón `^[0-9]+([.,][0-9]+)?$`. Si no cumple → MSG-06. Se usa `[0-9]`, no `\d`, porque en .NET `\d` también acepta dígitos de otros alfabetos.
+> 2. Parte entera de más de 6 dígitos, contados **después de quitar los ceros a la izquierda** → MSG-08 (o MSG-20 si es un presupuesto), **sin convertir** el texto, para evitar desbordar `decimal`. Así, `0000012.50` se acepta como S/ 12.50.
+> 3. Más de 2 dígitos tras el separador → MSG-09. Así, `1,250` se rechaza (no se interpreta como 1.25 ni como 1250).
+> 4. Se reemplaza la coma por punto y se convierte con `CultureInfo.InvariantCulture` y `NumberStyles.AllowDecimalPoint`.
+> 5. Rango: RN-051, RN-052, RN-062, RN-063.
+>
+> El campo usa `<input type="text" inputmode="decimal">`. La API REST no usa esta regla: recibe el monto como número JSON (RN-053).
+>
+> **Motivo:** muchos teclados numéricos de Android en español solo ofrecen la coma como separador decimal (decisión del 2026-11-08). Aceptarla sin separador de miles y con 2 decimales como máximo evita que `3,50` se guarde como S/ 350.00.
+
+**RN-106** | Categoría: Registro | Prioridad: MUST | Fuente: Alcance M3 · Decisión del equipo
+
+Patrón EARS: Unwanted
+
+SI el usuario guarda un ingreso sin monto o sin fecha, ENTONCES el sistema DEBE rechazar el ingreso.
+
+✅ **Ejemplo:** Un ingreso con monto, origen y fecha se guarda.
+
+❌ **Contraejemplo:** Se guarda un ingreso sin fecha.
+
+> El formulario «Nuevo ingreso» tiene estos campos: Monto, Origen, Fecha y, solo con «Otros», Descripción (RN-060). El ingreso **no** tiene medio de pago. El origen obligatorio está en RN-058. Mensajes: MSG-11 y MSG-16.
+
+**RN-107** | Categoría: UX | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario abre el formulario «Nuevo ingreso», el sistema DEBE proponer como fecha la fecha actual en la zona horaria `America/Lima`.
+
+✅ **Ejemplo:** El 2026-11-08 a las 23:30 (hora de Lima), el campo Fecha muestra `2026-11-08`.
+
+❌ **Contraejemplo:** El campo aparece vacío o muestra `2026-11-09`.
+
+**RN-109** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-04 · DEC-24
+
+Patrón EARS: Unwanted
+
+SI la fecha de un movimiento es anterior al primer día del mes que está 11 meses antes del mes en curso (hora de Lima), ENTONCES el sistema DEBE rechazar el movimiento.
+
+✅ **Ejemplo:** El 2026-11-08, la fecha más antigua permitida es `2025-12-01`: un gasto con esa fecha se acepta. Así, el usuario puede registrar en 12 meses calendario (2025-12 a 2026-11).
+
+❌ **Contraejemplo:** El 2026-11-08 se acepta un gasto con fecha `2025-11-30`.
+
+> Mensaje: MSG-17. Al editar un movimiento ya fuera de la ventana, se aplica la misma regla (DEC-34): el movimiento puede eliminarse, pero no modificarse.
+
+**RN-110** | Categoría: Registro | Prioridad: MUST | Fuente: DEC-13 · DEC-32
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario cambia el origen de un ingreso de «Otros» a otro valor, el sistema DEBE descartar la descripción.
+
+✅ **Ejemplo:** Un ingreso con origen «Otros» y descripción «Venta de libros» pasa a «Trabajo»; se guarda con `SourceDescription = null`.
+
+❌ **Contraejemplo:** El ingreso de origen «Trabajo» conserva la descripción «Venta de libros».
+
+> Aplica a los formularios MVC. En la API, un `sourceDescription` con un origen distinto de `Other` responde `400` con MSG-26 (ADR-004, sección 3.2).
+>
+> **DEC-66:** en los formularios MVC, al crear o al editar, si llega una descripción con un origen distinto de «Otros» (posible sin JavaScript, porque entonces el campo está siempre visible), el sistema la descarta y guarda `SourceDescription = null`, sin mostrar error. Ejemplo: sin JavaScript, el usuario elige «Trabajo», escribe «Venta de libros» y guarda S/ 100.00; el ingreso se crea con origen «Trabajo» y sin descripción. Contraejemplo: el formulario se rechaza con MSG-26, o el ingreso de «Trabajo» se guarda con la descripción.
+
+**RN-116** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-012 · Decisión del equipo
+
+Patrón EARS: Unwanted
+
+SI una validación de las secciones 1, 3 o 4 rechaza un dato, ENTONCES el sistema DEBE mostrar el mensaje de la sección 10 que corresponde a esa regla, junto al campo afectado.
+
+✅ **Ejemplo:** El usuario ingresa la fecha `2026-11-09` el 2026-11-08; bajo el campo Fecha aparece «La fecha no puede ser posterior a hoy.» (MSG-10), vinculado con `aria-describedby`.
+
+❌ **Contraejemplo:** Aparece «Datos inválidos» en la parte superior del formulario, o un mensaje en inglés generado por la validación por defecto.
+
+> La API REST devuelve `400` con un `ValidationProblemDetails` cuyo diccionario `errors` usa los mismos textos, con el nombre del campo en `camelCase` como clave (ADR-004, sección 3.1).
+
+> Tras un error, el foco va al primer campo con error; el resumen de errores (MSG-44) no recibe foco (DEC-78). Los errores que no son de un campo (MSG-02, MSG-21, MSG-22) se muestran en un bloque propio con `role="alert"` sobre el formulario (DEC-80).
+
+**RN-131** | Categoría: UX | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS una solicitud de resumen esté en curso, el sistema DEBE mostrar el botón «Generar resumen del mes» deshabilitado con el texto «Generando resumen…».
+
+✅ **Ejemplo:** El usuario pulsa el botón dos veces seguidas; se envía 1 sola solicitud a Ollama.
+
+❌ **Contraejemplo:** Cada pulsación envía una solicitud nueva y el modelo procesa 2 en paralelo.
+
+> El texto «Generando resumen…» se anuncia con `aria-live="polite"`.
+
+> Sin JavaScript el botón no se deshabilita y un segundo envío es posible (limitación aceptada, DEC-90).
+
+**RN-140** | Categoría: Seguridad | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE enviar la cabecera `Cache-Control: no-store` en toda respuesta que requiera sesión autenticada.
+
+✅ **Ejemplo:** La respuesta de `GET /dashboard` incluye `Cache-Control: no-store`; tras cerrar sesión, el botón «Atrás» del navegador vuelve a solicitar la página y se redirige al inicio de sesión.
+
+❌ **Contraejemplo:** Tras cerrar sesión, «Atrás» muestra desde la caché del navegador el dashboard con los saldos.
+
+**RN-168** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M3 · DEC-57
+
+Patrón EARS: State-driven
+
+MIENTRAS se envía el formulario «Nuevo gasto», «Nuevo ingreso» o de edición de un movimiento, el sistema DEBE mostrar su botón de envío deshabilitado.
+
+✅ **Ejemplo:** Con la respuesta del servidor retrasada, el usuario pulsa «Guardar gasto» dos veces seguidas: el botón queda deshabilitado tras la primera pulsación y se crea 1 solo gasto.
+
+❌ **Contraejemplo:** Cada pulsación envía el formulario y se crean dos gastos iguales.
+
+> Se implementa como mejora progresiva con JavaScript (ADR-006). Si la respuesta vuelve con errores de validación, la página se recarga con el botón habilitado. Sin JavaScript, o si se pierde la respuesta y el usuario vuelve a enviar, el doble envío sigue siendo posible: limitación aceptada (DEC-57). En el resumen de IA se aplica RN-131.
+
+> Los formularios de registro, inicio de sesión y presupuesto también deshabilitan su botón mientras se envían, con el mismo mecanismo (DEC-74).
+
+**RN-172** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M3, M4 · DEC-69
+
+Patrón EARS: Event-driven
+
+CUANDO el sistema guarda o elimina un movimiento, o guarda un presupuesto, desde un formulario MVC, el sistema DEBE mostrar una sola vez en la página de destino el mensaje de confirmación correspondiente en un bloque con `role="status"`.
+
+✅ **Ejemplo:** Un usuario de prueba guarda un gasto de S/ 3.50: `/dashboard` muestra «Gasto guardado.»; al recargar la página, el mensaje ya no aparece.
+
+❌ **Contraejemplo:** No aparece ninguna confirmación, o la confirmación reaparece en cada recarga.
+
+> Mensajes: gasto nuevo MSG-49, ingreso nuevo MSG-50, edición de un movimiento MSG-51, eliminación MSG-52, presupuesto creado o editado MSG-53. Viajan en TempData (Post/Redirect/Get). La API no muestra confirmaciones: responde con su código HTTP.
+
+**RN-177** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-71
+
+Patrón EARS: Event-driven
+
+CUANDO llega `POST /account/logout` sin una sesión autenticada vigente, el sistema DEBE redirigir a la página de inicio de sesión sin validar el token antiforgery y sin mostrar un error.
+
+✅ **Ejemplo:** La sesión de `demo1` expiró y pulsa «Cerrar sesión»: llega al inicio de sesión, sin MSG-46 ni MSG-48.
+
+❌ **Contraejemplo:** La respuesta es `400` por el token antiforgery, o el usuario vuelve al inicio de sesión con `returnUrl=/account/logout`.
+
+> Con sesión vigente se valida el token (RN-101) y se aplica RN-097. La ruta es `[AllowAnonymous]` y valida el token de forma explícita solo si hay sesión.
+
+--- Mensajes citados (03 §10) ---
+| ID | Texto | Reglas |
+|---|---|---|
+| MSG-02 | No se pudo iniciar sesión. Verifica tu correo y contraseña, o inténtalo de nuevo en unos minutos. | RN-050 |
+| MSG-06 | Ingresa el monto solo con números y, si tiene decimales, un punto o una coma (por ejemplo, 12.50 o 12,50). | RN-104 |
+| MSG-07 | El monto debe ser mayor que cero. | RN-051 |
+| MSG-08 | El monto no puede superar S/ 100,000.00. | RN-052, RN-104 |
+| MSG-09 | El monto debe tener como máximo dos decimales. | RN-053, RN-054, RN-104 |
+| MSG-10 | La fecha no puede ser posterior a hoy. | RN-057 |
+| MSG-11 | Ingresa el monto. | RN-104, RN-105, RN-106 |
+| MSG-12 | Selecciona una categoría. | RN-105 |
+| MSG-14 | Selecciona el origen del ingreso. | RN-058 |
+| MSG-15 | La descripción puede tener como máximo 100 caracteres. | RN-061 |
+| MSG-16 | Ingresa la fecha. | RN-105, RN-106 |
+| MSG-17 | La fecha no puede ser anterior al {fecha mínima en dd/MM/yyyy}. | RN-109 |
+| MSG-20 | El presupuesto no puede superar S/ 100,000.00. | RN-063, RN-104 |
+| MSG-21 | Ya tienes un presupuesto para este mes. Puedes cambiarlo desde «Editar presupuesto». | RN-064 |
+| MSG-22 | Solo puedes crear o editar el presupuesto del mes en curso. | RN-118, RN-167 |
+| MSG-25 | Ingresa el monto del presupuesto. | RN-104, RN-139 |
+| MSG-26 | Este campo no corresponde a este tipo de movimiento. | ADR-004 §3 (solo API), RN-110 |
+| MSG-44 | Revisa los datos ingresados. | RN-116, ADR-004 §3.1 (API: `title` de `ValidationProblemDetails`; MVC: título del resumen de errores, `09` CMP-04) |
+| MSG-46 | Tu formulario caducó. Vuelve a la página e inténtalo de nuevo. | RN-170 |
+| MSG-48 | Tu sesión terminó. Inicia sesión para continuar. | RN-171 |
+| MSG-49 | Gasto guardado. | RN-172 |
+| MSG-50 | Ingreso guardado. | RN-172 |
+| MSG-51 | Cambios guardados. | RN-172 |
+| MSG-52 | Movimiento eliminado. | RN-172, RN-178 |
+| MSG-53 | Presupuesto guardado. | RN-172 |
+</contexto>
+<tarea>
+Genera un prototipo visual de esta pantalla como un artifact HTML/CSS/JS 
+interactivo. Debe:
+1. Reflejar fielmente el wireframe textual.
+2. Incluir datos de ejemplo realistas (no lorem ipsum).
+3. Ser responsive (funcionar en móvil y desktop).s
+4. Incluir estados: vacío, con datos, error, loading.
+5. Usar los design tokens definidos.
+</tarea>
+<restricciones>
+    - NO es código de producción: es un prototipo para validar con stakeholders.
+    - Priorizar claridad del flujo sobre pixel-perfection.
+    - Incluir interacciones básicas (clics, navegación simulada, validaciones).
+    - Si una sección depende de datos dinámicos, usar datos ficticios del caso.
+</restricciones>
+]]></prompt>
+  </paso>
+  <salida archivo="prototipos/P-005-nuevo-ingreso.html" tipo="artifact HTML/CSS/JS interactivo" insumo_de="Agente Prototype Reviewer"/>
+</ejecucion_bmad>

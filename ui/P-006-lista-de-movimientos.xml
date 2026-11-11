@@ -1,0 +1,559 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ejecucion_bmad documento="09-ui-spec.md" pantalla="P-006" version="v1.0" fecha="2026-11-11" proyecto="ExpenseFlow AI">
+  <paso numero="1" agente="Prototipo Visual">
+    <prompt><![CDATA[
+<agente>
+Eres un desarrollador frontend senior. Tu trabajo es convertir un 
+wireframe textual en un prototipo visual interactivo.
+</agente>
+<contexto>
+Estoy prototipando la pantalla P-006 — Lista de movimientos de ExpenseFlow AI.
+--- SCREEN SPEC --
+### P-006 — Lista de movimientos
+
+| Campo | Valor |
+|---|---|
+| Propósito | Ver todos los movimientos, ordenados y paginados, y corregir o eliminar cualquiera |
+| Actor | Usuario autenticado |
+| HU | HU-005, HU-006, HU-011 |
+| Reglas | RN-007, RN-079, RN-080, RN-117, RN-125, RN-162, RN-172, RN-178 |
+| Layout | CMP-01, «Movimientos» activo |
+
+**Datos:** 20 movimientos por página (RN-117), orden `Date DESC, CreatedAt DESC, Id DESC`, con CMP-07 y botones «Editar» / «Eliminar». Total y página actual en texto.
+
+**Acciones:**
+
+| Acción | Resultado |
+|---|---|
+| «Editar» en una fila | P-007 (`/transactions/{id}/edit?page=n`, para volver a la misma página, DEC-65) |
+| «Eliminar» en una fila | P-008 |
+| «Anterior» / «Siguiente» | `?page=n-1` / `?page=n+1` |
+| «Nuevo gasto» / «Nuevo ingreso» | P-004 / P-005 |
+
+**Wireframe (360 px):**
+
+```
+┌────────────────────────────────────────┐
+│ CMP-01 (Movimientos activo)             │
+├────────────────────────────────────────┤
+│ <h1> Movimientos                       │
+│ 25 movimientos · Página 1 de 2         │ [Propuesta] texto 0.875rem muted
+│ ┌──────────────────┐┌─────────────────┐│
+│ │ + Nuevo gasto    ││ + Nuevo ingreso ││
+│ └──────────────────┘└─────────────────┘│
+│                                        │
+│ ┌ ol class="ef-tx-list" ─────────────┐ │
+│ │ 01/11/2026 · Transporte · Gasto     │ │ CMP-07 con acciones
+│ │                          S/ 5.00    │ │
+│ │ [ Editar ]  [ Eliminar ]            │ │
+│ │─────────────────────────────────────│ │
+│ │ …19 filas más…                      │ │
+│ └─────────────────────────────────────┘ │
+│                                        │
+│ <nav aria-label="Paginación">          │ CMP-12
+│ ┌──────────┐  Página 1 de 2 ┌─────────┐│
+│ │ Anterior │                │Siguiente││ «Anterior» deshabilitado en la página 1
+│ └──────────┘                └─────────┘│ (renderizado como <span aria-disabled="true">)
+└────────────────────────────────────────┘
+```
+
+**Escritorio:** misma lista; cada fila en una sola línea: texto a la izquierda, monto y acciones a la derecha.
+
+**Estados:**
+
+| Estado | Qué se ve |
+|---|---|
+| Con movimientos | Lista + paginación (solo si hay más de 1 página) |
+| Sin movimientos (`demo4`) | MSG-41 (no MSG-31) en un bloque vacío centrado + los dos botones de alta |
+| Página posterior a la última | MSG-31 + enlace «Ir a la página 1» `[Propuesta: texto del enlace]` |
+| Página `0`, `-1`, `abc` | El servidor muestra la página 1 (sin mensaje) |
+| Tras editar | La misma página con MSG-51 («Cambios guardados.») (DEC-65, RN-172) |
+| Tras eliminar | La misma página con MSG-52 («Movimiento eliminado.»). Si la página quedó vacía y no es la primera, la página anterior con MSG-52 (RN-178) |
+
+**Should (HU-016, no lista — PQ-08):** sobre la lista, un `<form method="get">` plegable con `<details><summary>Filtrar</summary>`: rango de fechas (dos `type="date"`), categoría, tipo y medio de pago (`<select>`), botones «Aplicar filtros» y «Quitar filtros». Los filtros se conservan en la paginación (`?page=2&category=…`). Bloqueado por las reglas y mensajes que faltan en HU-016.
+
+--- Reglas comunes a todas las pantallas (09 §3.0) ---
+### 3.0 Reglas comunes a todas las pantallas
+
+Estas reglas aplican a todas las pantallas y no se repiten en cada ficha.
+
+**Documento y semántica (PRINCIPIO-001, PRINCIPIO-012)**
+
+- `<html lang="es-PE">`, `<meta name="viewport" content="width=device-width, initial-scale=1">` (sin `maximum-scale` ni `user-scalable=no`).
+- `<title>` único: «`<Nombre de la pantalla>` — ExpenseFlow AI».
+- Primer elemento enfocable: enlace «Saltar al contenido principal» (visible al recibir foco) que lleva a `<main id="contenido">`.
+- Landmarks: `<header>`, `<nav aria-label="Principal">` (solo con sesión), `<main id="contenido">`, `<footer>`.
+- Un único `<h1>` por pantalla. Sin saltos de nivel de encabezado.
+- Ningún texto en inglés visible ni en atributos accesibles (`aria-label`, `title`, `alt`, `placeholder`).
+
+**Formularios (PRINCIPIO-012, ADR-006)**
+
+- `<form method="post" novalidate>` con el token antiforgery de Razor.
+- Cada campo usa CMP-03: `<label for>` visible siempre (nunca solo `placeholder`).
+- Error de un campo: texto bajo el campo, con icono SVG decorativo (`aria-hidden="true"`) **y** el texto del mensaje; el campo recibe `aria-invalid="true"` y `aria-describedby` apunta al `id` del error (y al de la ayuda, si hay). El borde rojo nunca es la única señal.
+- Si hay errores de campo, el formulario muestra arriba CMP-04 y el **primer campo con error** lleva el atributo `autofocus` (lo pone Razor, funciona sin JS). CMP-04 no recibe el foco (DEC-78).
+- **Errores que no son de un campo** (MSG-02, MSG-21, MSG-22): se muestran en un bloque propio sobre el formulario, con `role="alert"` y estilo `--ef-danger-bg`, sin CMP-04 y sin `aria-invalid` en los campos (DEC-80). Si además hay errores de campo, se muestran ambos.
+- Todo botón de envío de formulario usa CMP-10 (DEC-74).
+- Tras un error, el servidor vuelve a mostrar lo que el usuario escribió (salvo contraseñas).
+- Los campos de radio se agrupan en `<fieldset>` con `<legend>`; el error del grupo se asocia al `<fieldset>` con `aria-describedby`.
+
+**Mensajes de confirmación (RN-172)**
+
+- Tras guardar o eliminar, la página de destino muestra **una sola vez** la confirmación (MSG-49 a MSG-53), al inicio de `<main>`, en un bloque con `role="status"`, estilo `--ef-success-bg` / `--ef-success-text` y un icono decorativo. Llega por TempData: al recargar, ya no aparece.
+- El bloque no recibe el foco ni se cierra solo; desaparece en la siguiente navegación.
+
+**Mejora progresiva (DP-4)**
+
+- Toda pantalla funciona igual sin JavaScript, salvo: deshabilitar el botón al enviar (RN-131, RN-168), mostrar u ocultar «Descripción» en ingresos y el diálogo de eliminación. Cada uno tiene su comportamiento sin JS documentado en su ficha.
+- `site.js` se carga con `defer` al final del `<body>`.
+
+**Tamaños mínimos (WCAG 2.2, 2.5.8)**
+
+- Toda área interactiva mide al menos 44 × 44 px (el mínimo AA es 24 × 24; se usa 44 por el contexto Android).
+- El foco es siempre visible (token `--ef-focus-ring`) y no queda tapado por la cabecera (2.4.11): la cabecera **no es fija** (`position: static`).
+
+**Montos**
+
+- Columna o bloque de montos con `font-variant-numeric: tabular-nums` y alineado a la derecha en listas.
+- El tipo de movimiento siempre se dice en texto («Gasto» / «Ingreso»), no solo con color.
+
+--- Componentes que usa la pantalla ---
+### CMP-01 — Layout autenticado
+
+**Propósito:** marco común de las pantallas con sesión; da acceso a las secciones y a «Cerrar sesión».
+**HU:** HU-002B.
+
+**Datos:** ninguno financiero. Puede mostrar el correo del usuario `[Propuesta]`; nunca su contraseña.
+
+**Acciones:**
+
+| Acción | Elemento | Destino |
+|---|---|---|
+| Ir al dashboard | Enlace «Inicio» y la marca «ExpenseFlow AI» | `/dashboard` |
+| Ir a la lista | Enlace «Movimientos» | `/transactions` |
+| Ir al presupuesto | Enlace «Presupuesto» | `/budgets/create` si no hay presupuesto del mes; `/budgets/edit` si lo hay (lo decide el servidor) |
+| Cerrar sesión | `<form method="post" action="/account/logout">` con botón «Cerrar sesión» y token antiforgery | P-002 (DEC-63). Con la sesión ya expirada, también P-002, sin error (RN-177) |
+
+**Reglas:** RN-097, RN-140 (`Cache-Control: no-store`, lo aplica el servidor), RN-177.
+
+**Wireframe (360 px):**
+
+```
+┌────────────────────────────────────────┐
+│ [Saltar al contenido principal]  ← solo visible con foco
+├────────────────────────────────────────┤ <header> fondo --ef-color-primary
+│ ExpenseFlow AI            [Cerrar sesión]│ marca: enlace a /dashboard (texto blanco, 1.125rem, 700)
+│                                         │ botón: btn-outline-light, 44 px de alto
+├────────────────────────────────────────┤ <nav aria-label="Principal"> fondo --ef-color-surface
+│  Inicio  │ Movimientos │ Presupuesto   │ 3 enlaces en fila, cada uno 1/3 del ancho, 48 px de alto
+│  ▔▔▔▔▔▔                                │ el activo: aria-current="page", texto 700 y borde inferior 3 px primario
+├────────────────────────────────────────┤
+│ <main id="contenido">                  │ container, padding lateral 16 px
+│   …contenido de la pantalla…           │
+├────────────────────────────────────────┤ <footer> texto --ef-color-text-muted, 0.875rem
+│ Aplicación académica con datos         │
+│ ficticios. Los saldos son calculados   │
+│ según tus registros.                   │ [Propuesta] (PRINCIPIO-006, PRINCIPIO-009)
+└────────────────────────────────────────┘
+```
+
+**Escritorio (≥ 768 px):** cabecera y navegación en una sola franja: marca a la izquierda, los 3 enlaces en el centro, «Cerrar sesión» a la derecha. Contenido en `container` (máx. 1140 px).
+
+**Sin JavaScript:** igual. **No** se usa el componente `collapse` («hamburguesa») de Bootstrap, porque depende de JS; con 3 enlaces cabe en 360 px.
+
+### CMP-07 — Fila de movimiento
+
+**Usado en:** P-003 (sin acciones) y P-006 (con «Editar» y «Eliminar»).
+**HU:** HU-003, HU-004, HU-005, HU-008. **Reglas:** RN-079, RN-080, RN-081.
+
+**Formato del texto (literal de las HU):**
+
+- Gasto: «08/11/2026 · Transporte · Gasto · S/ 3.50»
+- Ingreso: «08/11/2026 · Apoyo familiar · Ingreso · S/ 600.00»
+- Ingreso «Otros» con descripción: «08/11/2026 · Otros: Venta de libros · Ingreso · S/ 80.00»
+
+**Wireframe (360 px):**
+
+```
+<li class="ef-tx">
+┌────────────────────────────────────────┐
+│ 08/11/2026 · Transporte · Gasto        │ 1ª línea: fecha (tabular), categoría u origen, tipo
+│                            S/ 3.50     │ 2ª línea (o misma en ≥ 576 px): monto, 600, derecha
+│ [ Editar ]  [ Eliminar ]               │ solo en P-006: botones pequeños, 44 px de alto
+└────────────────────────────────────────┘
+```
+
+- El DOM contiene el literal completo de la fila: antes del monto hay un separador « · » visualmente oculto (`visually-hidden`), así que el texto es «08/11/2026 · Transporte · Gasto · S/ 3.50» aunque el monto se vea en otra línea (DEC-83).
+- La palabra «Gasto» / «Ingreso» va en una insignia de texto (`badge`) con fondo neutro; el color del monto es el texto normal (no se colorea por tipo, para no depender del color).
+- La descripción «Otros» larga (hasta 100 caracteres) se ajusta en varias líneas (`overflow-wrap: anywhere`); nunca se trunca.
+- En P-006, los botones llevan un nombre accesible completo: `aria-label="Editar gasto del 08/11/2026 de S/ 3.50"` y `aria-label="Eliminar gasto del 08/11/2026 de S/ 3.50"`. El texto visible sigue siendo «Editar» / «Eliminar».
+- Separador inferior 1 px `--ef-color-divider`; altura mínima 56 px.
+
+### CMP-11 — Diálogo de confirmación de eliminación
+
+**Usado en:** P-006 / P-008. **HU:** HU-006. **Reglas:** RN-114 (DEC-67).
+
+| Parte | Regla |
+|---|---|
+| Sin JavaScript | `<details class="ef-delete">` en la fila: `<summary>` «Eliminar» con `aria-label` completo; panel con MSG-18 y el botón «Eliminar definitivamente» dentro de un `<form method="post">` con token y `page` |
+| Con JavaScript | `<dialog>` modal (`showModal()`), `aria-labelledby` y `aria-describedby`; foco inicial en «Cancelar»; `Esc` o «Cancelar» cierran y devuelven el foco al «Eliminar» de la fila |
+| Botones | «Cancelar» secundario y «Eliminar» `btn-danger`, 48 px de alto; el texto nunca depende solo del color |
+| Ancho | 100 % − 32 px, máximo 420 px |
+
+El marcado completo y el wireframe están en P-008.
+
+### CMP-12 — Paginación
+
+**Usado en:** P-006. **HU:** HU-005. **Reglas:** RN-117, RN-178.
+
+```html
+<nav aria-label="Paginación">
+  <a class="btn btn-outline-primary" href="/transactions?page=1" rel="prev">Anterior</a>
+  <p class="ef-page" aria-current="page">Página 2 de 2</p>
+  <span class="btn btn-outline-secondary disabled" aria-disabled="true">Siguiente</span>
+</nav>
+```
+
+- Solo se renderiza si hay más de 1 página.
+- «Anterior» y «Siguiente» son enlaces `GET` de 48 px de alto; en la primera o la última página, el que no aplica se renderiza como `<span aria-disabled="true">` (no es enfocable).
+- El texto «Página *n* de *m*» es el único indicador de posición; no hay números de página intermedios.
+- Funciona igual sin JavaScript.
+--- DESIGN TOKENS --
+## 4. Design tokens
+
+Los tokens se definen como variables CSS en `wwwroot/css/site.css`, cargado **después** de `bootstrap.min.css`. Los que tienen equivalente en Bootstrap se asignan también a `--bs-*`.
+
+### 4.1 Colores
+
+Todos los contrastes están calculados con la fórmula de WCAG 2.2.
+
+| Token | Valor | Uso | Contraste verificado |
+|---|---|---|---|
+| `--ef-color-primary` | `#0B5C8A` | Botones primarios, enlaces, cabecera, barra normal | Blanco sobre él 7.21:1; sobre `--ef-color-bg` 6.72:1 |
+| `--ef-color-primary-hover` | `#084A6F` | Hover y activo del primario | Blanco sobre él 9.46:1 |
+| `--ef-primary-subtle` | `#E8F2F9` | Fondo de opción seleccionada, aviso informativo | `#0B4F75` sobre él 7.74:1 |
+| `--ef-color-secondary` | `#475467` | Botones secundarios, insignias «Gasto»/«Ingreso» | Blanco sobre él 7.69:1 |
+| `--ef-color-accent` | `#0F6E5C` | Borde del bloque de IA, detalles de marca | Sobre blanco 6.17:1 |
+| `--ef-color-bg` | `#F5F7FA` | Fondo de página | — |
+| `--ef-color-surface` | `#FFFFFF` | Tarjetas, formularios, diálogos | — |
+| `--ef-color-text` | `#1A1F29` | Texto principal | Sobre blanco 16.51:1; sobre fondo 15.38:1 |
+| `--ef-color-text-muted` | `#4B5565` | Ayudas, leyendas, pie | Sobre blanco 7.54:1; sobre fondo 7.02:1 |
+| `--ef-color-border` | `#6B7280` | Bordes de campos, mosaicos y barra (componentes) | Sobre blanco 4.83:1 (≥ 3:1, WCAG 1.4.11) |
+| `--ef-color-divider` | `#E4E8EE` | Separadores decorativos y pista de la barra | Decorativo; no transmite información |
+| `--ef-color-danger` | `#B42318` | Texto de error, saldo negativo | Sobre blanco 6.57:1 |
+| `--ef-danger-bg` / `--ef-danger-text` | `#FEF0EE` / `#912018` | Aviso del 100 %, resumen de errores | 7.80:1 |
+| `--ef-warning-bg` / `--ef-warning-text` | `#FFF4E0` / `#7A3E00` | Aviso del 80 %, MSG-23 | 7.66:1 |
+| `--ef-success-bg` / `--ef-success-text` | `#ECF7EF` / `#1F6E37` | Confirmaciones MSG-49 a MSG-53 (RN-172) | 5.72:1 |
+| `--ef-info-bg` / `--ef-info-text` | `#E8F2F9` / `#0B4F75` | Aviso de datos ficticios, MSG-48 | 7.74:1 |
+| `--ef-progress-normal` | `#0B5C8A` | Barra < 80 % | Sobre la pista 5.86:1 |
+| `--ef-progress-warning` | `#B45309` | Barra 80 %–<100 % | Sobre la pista 4.08:1 (≥ 3:1) |
+| `--ef-progress-danger` | `#B42318` | Barra ≥ 100 % | Sobre la pista 5.35:1 |
+| `--ef-focus-ring` | `0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A` | Indicador de foco (doble anillo: visible sobre fondos claros y sobre la cabecera azul) | Azul sobre fondo 6.72:1 |
+
+**Reglas de uso del color:**
+
+- Sin modo oscuro en el MVP: `color-scheme: light` en `:root`.
+- El rojo, el ámbar y el verde nunca son la única señal: siempre van con texto (y un icono decorativo).
+- Los importes se escriben en `--ef-color-text`, salvo el saldo negativo (`--ef-color-danger` + texto).
+
+### 4.2 Tipografía
+
+| Token | Valor |
+|---|---|
+| `--ef-font-family` | `system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif` (Roboto en Android) |
+| `--ef-font-numeric` | `font-variant-numeric: tabular-nums` en importes, fechas y porcentajes |
+| Tamaño base | `16px` (`1rem`); los campos nunca bajan de 16 px (evita el zoom automático en móviles) |
+| Interlineado | `1.5` en general, `1.6` en el texto de la IA |
+
+| Estilo | Móvil | ≥ 768 px | Peso | Uso |
+|---|---|---|---|---|
+| `h1` | 1.5rem | 1.75rem | 700 | Título de pantalla |
+| `h2` | 1.125rem | 1.25rem | 600 | Título de sección |
+| Importe destacado | 1.75rem | 2rem | 700 | Saldo del mes |
+| Importe secundario | 1.25rem | 1.25rem | 700 | Saldo acumulado |
+| Cuerpo | 1rem | 1rem | 400 | Texto, valores |
+| Etiqueta | 1rem | 1rem | 600 | `<label>`, `<legend>` |
+| Pequeño | 0.875rem | 0.875rem | 400 | Ayudas, leyendas, pie |
+
+El texto debe seguir siendo legible con zoom al 200 % y con espaciado de texto aumentado (WCAG 1.4.4, 1.4.12): sin alturas fijas en contenedores de texto.
+
+### 4.3 Espaciado, formas y tamaños
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--ef-space-1` … `--ef-space-6` | 4, 8, 12, 16, 24, 32 px | Escala de márgenes y padding |
+| Gutter lateral | 16 px | Contenedor en móvil |
+| `--ef-radius` | 0.5rem (8 px) | Tarjetas, campos, botones, mosaicos |
+| `--ef-radius-sm` | 0.25rem | Insignias |
+| Sombra de tarjeta | `0 1px 2px rgba(16, 24, 40, .08)` | Solo tarjetas |
+| Ancho máx. de formularios | 560 px | P-004, P-005, P-007, P-009, P-010 |
+| Ancho máx. de autenticación | 440 px | P-001, P-002 |
+| Contenedor del dashboard | 1140 px | P-003, P-006 |
+
+| Componente | Alto mínimo | Notas |
+|---|---|---|
+| Botón primario de formulario | 56 px | Ancho completo en móvil |
+| Botón normal / enlace de navegación | 48 px | |
+| Botón de fila («Editar», «Eliminar») | 44 px | `min-width: 44px` |
+| Campo de texto / fecha | 48 px (Monto: 56 px) | Padding horizontal 12 px |
+| Mosaico de opción | 56 px | |
+| Casilla de verificación | 24 × 24 px dentro de un área clicable de 44 px | |
+| Barra de progreso | 16 px | |
+| Fila de movimiento | 56 px | |
+
+### 4.4 Puntos de quiebre
+
+Los de Bootstrap 5, diseñando primero para 360 px (RC-1, T4):
+
+| Nombre | Desde | Cambios principales |
+|---|---|---|
+| base | 0 (diseño a 360 px) | Una columna; botones a ancho completo |
+| `sm` | 576 px | Categorías en 3 columnas; filas de movimiento en una línea |
+| `md` | 768 px | Cabecera y navegación en una franja |
+| `lg` | 992 px | Dashboard en dos columnas |
+
+### 4.5 Ejemplo de `site.css` (cabecera de tokens)
+
+```css
+:root {
+  color-scheme: light;
+  --ef-color-primary: #0B5C8A;
+  --ef-color-primary-hover: #084A6F;
+  --ef-primary-subtle: #E8F2F9;
+  --ef-color-secondary: #475467;
+  --ef-color-accent: #0F6E5C;
+  --ef-color-bg: #F5F7FA;
+  --ef-color-surface: #FFFFFF;
+  --ef-color-text: #1A1F29;
+  --ef-color-text-muted: #4B5565;
+  --ef-color-border: #6B7280;
+  --ef-color-divider: #E4E8EE;
+  --ef-color-danger: #B42318;
+  --ef-danger-bg: #FEF0EE;   --ef-danger-text: #912018;
+  --ef-warning-bg: #FFF4E0;  --ef-warning-text: #7A3E00;
+  --ef-success-bg: #ECF7EF;  --ef-success-text: #1F6E37;
+  --ef-info-bg: #E8F2F9;     --ef-info-text: #0B4F75;
+  --ef-progress-normal: #0B5C8A;
+  --ef-progress-warning: #B45309;
+  --ef-progress-danger: #B42318;
+  --ef-focus-ring: 0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A;
+  --ef-radius: .5rem;
+
+  /* Puente con Bootstrap 5 */
+  --bs-primary: var(--ef-color-primary);
+  --bs-primary-rgb: 11, 92, 138;
+  --bs-body-bg: var(--ef-color-bg);
+  --bs-body-color: var(--ef-color-text);
+  --bs-border-color: var(--ef-color-border);
+  --bs-border-radius: var(--ef-radius);
+  --bs-link-color: var(--ef-color-primary);
+  --bs-link-hover-color: var(--ef-color-primary-hover);
+  --bs-body-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+}
+.btn-primary {
+  --bs-btn-bg: var(--ef-color-primary);
+  --bs-btn-border-color: var(--ef-color-primary);
+  --bs-btn-hover-bg: var(--ef-color-primary-hover);
+  --bs-btn-hover-border-color: var(--ef-color-primary-hover);
+  --bs-btn-active-bg: var(--ef-color-primary-hover);
+}
+:focus-visible { outline: none; box-shadow: var(--ef-focus-ring); }
+.ef-amount { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+```
+--- REGLAS DE NEGOCIO RELEVANTES --
+**RN-007** | Categoría: Datos | Prioridad: MUST | Fuente: PRINCIPIO-007
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE filtrar toda consulta sobre datos financieros por el `UserId` obtenido del contexto de autenticación.
+
+✅ **Ejemplo:** `TransactionService` filtra con `User.FindFirstValue(ClaimTypes.NameIdentifier)`; la sesión de `demo1` solo recibe movimientos con `UserId = 7c9e6679-…`.
+
+❌ **Contraejemplo:** `GET /api/transactions?userId=b3f1a2c4-…` devuelve los movimientos de `demo2` a la sesión de `demo1`.
+
+**RN-079** | Categoría: Datos | Prioridad: MUST | Fuente: DEC-15
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE ordenar los movimientos por la clave (fecha del movimiento DESC, fecha de creación DESC, `Id` DESC).
+
+✅ **Ejemplo:** Hay dos movimientos con fecha `2026-11-08`: el `Id` 41, creado a las 10:15, y el `Id` 40, creado a las 09:00. El 41 aparece primero.
+
+❌ **Contraejemplo:** Los movimientos se ordenan por `Id` ascendente.
+
+> Aplica a los últimos movimientos (RN-078) y a la lista de movimientos (RN-117).
+
+**RN-080** | Categoría: UX | Prioridad: MUST | Fuente: DEC-15 · PRINCIPIO-012 · DEC-18
+
+Patrón EARS: Ubiquitous
+
+Cada movimiento de los últimos movimientos y de la lista de movimientos DEBE mostrar estos datos: fecha, categoría u origen, tipo de movimiento en texto, monto.
+
+✅ **Ejemplo:** «08/11/2026 · Transporte · Gasto · S/ 3.50». Para un ingreso con origen «Otros» y descripción: «05/11/2026 · Otros: Venta de libros · Ingreso · S/ 80.00».
+
+❌ **Contraejemplo:** El tipo se indica solo con color (verde o rojo), sin la palabra «Ingreso» o «Gasto»; o se agrega una columna «Descripción» vacía en todas las filas.
+
+> La descripción solo existe para ingresos con origen «Otros» (RN-060) y se muestra unida al origen. El gasto no tiene descripción (RN-016). Formato de fecha: RN-125.
+
+> La vista contiene como texto los separadores « · » de la fila y los dos puntos de los rótulos («Saldo del mes:»), para que las pruebas comparen el literal visible (DEC-83).
+
+**RN-081** | Categoría: UX | Prioridad: MUST | Fuente: DEC-11 · PRINCIPIO-003
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE mostrar todo importe con el patrón «S/ #,##0.00», con un espacio normal (U+0020) entre «S/» y la cifra.
+
+✅ **Ejemplo:** `1250.5m` se muestra como «S/ 1,250.50» y `2500m` como «S/ 2,500.00».
+
+❌ **Contraejemplo:** «S/ 1.250,50», «S/ 2 500,00», «S/ 1250.5», o «S/ 1,250.50» con un espacio de no separación (U+00A0), que ICU inserta en algunos sistemas.
+
+> Implementación: `MoneyFormat` (RN-013). Las pruebas comparan la cadena exacta. Importes negativos: RN-123.
+
+**RN-097** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-48
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario pulsa «Cerrar sesión», el sistema DEBE eliminar la cookie de autenticación del navegador.
+
+✅ **Ejemplo:** Tras cerrar sesión, el navegador ya no tiene la cookie: `GET /dashboard` redirige a la página de inicio de sesión y `GET /api/dashboard` responde `401`.
+
+❌ **Contraejemplo:** Tras cerrar sesión, el navegador conserva la cookie y el usuario puede seguir registrando gastos.
+
+> Después de cerrar sesión se muestra la página de inicio de sesión. Que el botón «Atrás» no muestre datos se garantiza con RN-140.
+>
+> **Limitación aceptada (DEC-48):** la cookie es autocontenida. Una copia capturada antes del cierre sigue siendo válida hasta su expiración (RN-098). Se acepta en el MVP porque solo hay datos ficticios (PRINCIPIO-006).
+
+> Si la sesión ya no es vigente al pulsar «Cerrar sesión», se aplica RN-177.
+
+**RN-114** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M3 · Decisión del equipo
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario pulsa «Eliminar» sobre un movimiento, el sistema DEBE pedir confirmación con MSG-18 antes de eliminarlo.
+
+✅ **Ejemplo:** Aparece «¿Eliminar este movimiento? Esta acción no se puede deshacer.» con los botones «Eliminar» y «Cancelar»; con «Cancelar» el movimiento sigue existiendo.
+
+❌ **Contraejemplo:** El movimiento se elimina con un solo clic.
+
+> El diálogo de confirmación es accesible por teclado y devuelve el foco al elemento que lo abrió (PRINCIPIO-012).
+>
+> **DEC-67:** sin JavaScript, «Eliminar» abre en la propia fila un `<details>` con MSG-18 y el botón «Eliminar definitivamente»; con JavaScript se usa un `<dialog>` modal con «Cancelar» y «Eliminar». Ambos envían el mismo `POST` y no hay ruta de confirmación (ADR-006).
+
+**RN-117** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M3 · DEC-19
+
+Patrón EARS: Ubiquitous
+
+La lista de movimientos DEBE mostrar los movimientos del usuario autenticado en páginas de 20, ordenados según RN-079.
+
+✅ **Ejemplo:** `demo6` tiene 25 movimientos: la página 1 muestra 20 y la página 2 muestra 5. Cada fila tiene las acciones «Editar» y «Eliminar».
+
+❌ **Contraejemplo:** La lista muestra todos los movimientos sin paginar, incluye filtros (son S3) o muestra movimientos de `demo2`.
+
+> Desde el dashboard, el enlace «Ver todos los movimientos» lleva a esta lista. Configuración: `TransactionListPageSize = 20`.
+>
+> En la vista MVC, un número de página menor que 1 o no entero muestra la página 1; una página posterior a la última muestra la lista vacía con MSG-31 y un enlace a la página 1. Si el usuario no tiene ningún movimiento, la página 1 muestra MSG-41 (RN-162), no MSG-31. En la API, ver ADR-004, sección 3.2.
+
+> Tras eliminar el último movimiento de una página posterior a la primera: RN-178. Tras guardar o eliminar: confirmación de RN-172.
+
+**RN-125** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-001 · DEC-35
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE mostrar las fechas en la UI con el formato `dd/MM/yyyy`.
+
+✅ **Ejemplo:** La fecha `2026-11-08` se muestra como «08/11/2026».
+
+❌ **Contraejemplo:** Se muestra «11/08/2026», «8/11/26» o «2026-11-08».
+
+> Los campos de entrada usan `<input type="date">`, que el navegador presenta según su configuración y envía en formato ISO (`yyyy-MM-dd`). La API REST usa ISO 8601.
+
+**RN-140** | Categoría: Seguridad | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE enviar la cabecera `Cache-Control: no-store` en toda respuesta que requiera sesión autenticada.
+
+✅ **Ejemplo:** La respuesta de `GET /dashboard` incluye `Cache-Control: no-store`; tras cerrar sesión, el botón «Atrás» del navegador vuelve a solicitar la página y se redirige al inicio de sesión.
+
+❌ **Contraejemplo:** Tras cerrar sesión, «Atrás» muestra desde la caché del navegador el dashboard con los saldos.
+
+**RN-162** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M5 · Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario no tenga movimientos, el sistema DEBE mostrar MSG-41 en lugar de los últimos movimientos del dashboard y en lugar de la lista de movimientos.
+
+✅ **Ejemplo:** `demo4` ve «Aún no tienes movimientos registrados.» en el dashboard y en la página 1 de la lista.
+
+❌ **Contraejemplo:** La sección aparece vacía sin texto, o la lista muestra MSG-31 («No hay más movimientos»).
+
+**RN-172** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M3, M4 · DEC-69
+
+Patrón EARS: Event-driven
+
+CUANDO el sistema guarda o elimina un movimiento, o guarda un presupuesto, desde un formulario MVC, el sistema DEBE mostrar una sola vez en la página de destino el mensaje de confirmación correspondiente en un bloque con `role="status"`.
+
+✅ **Ejemplo:** Un usuario de prueba guarda un gasto de S/ 3.50: `/dashboard` muestra «Gasto guardado.»; al recargar la página, el mensaje ya no aparece.
+
+❌ **Contraejemplo:** No aparece ninguna confirmación, o la confirmación reaparece en cada recarga.
+
+> Mensajes: gasto nuevo MSG-49, ingreso nuevo MSG-50, edición de un movimiento MSG-51, eliminación MSG-52, presupuesto creado o editado MSG-53. Viajan en TempData (Post/Redirect/Get). La API no muestra confirmaciones: responde con su código HTTP.
+
+**RN-177** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-71
+
+Patrón EARS: Event-driven
+
+CUANDO llega `POST /account/logout` sin una sesión autenticada vigente, el sistema DEBE redirigir a la página de inicio de sesión sin validar el token antiforgery y sin mostrar un error.
+
+✅ **Ejemplo:** La sesión de `demo1` expiró y pulsa «Cerrar sesión»: llega al inicio de sesión, sin MSG-46 ni MSG-48.
+
+❌ **Contraejemplo:** La respuesta es `400` por el token antiforgery, o el usuario vuelve al inicio de sesión con `returnUrl=/account/logout`.
+
+> Con sesión vigente se valida el token (RN-101) y se aplica RN-097. La ruta es `[AllowAnonymous]` y valida el token de forma explícita solo si hay sesión.
+
+**RN-178** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M3 · DEC-86
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario elimina el único movimiento de una página de la lista posterior a la primera, el sistema DEBE redirigirlo a la página anterior.
+
+✅ **Ejemplo:** `demo6` tiene 21 movimientos y elimina el único de la página 2: llega a la página 1 con MSG-52.
+
+❌ **Contraejemplo:** Llega a la página 2 vacía con MSG-31 («No hay más movimientos»), aunque la página 1 tiene 20 movimientos.
+
+--- Mensajes citados (03 §10) ---
+| ID | Texto | Reglas |
+|---|---|---|
+| MSG-18 | ¿Eliminar este movimiento? Esta acción no se puede deshacer. | RN-114 |
+| MSG-31 | No hay más movimientos. | RN-117 |
+| MSG-41 | Aún no tienes movimientos registrados. | RN-162 |
+| MSG-46 | Tu formulario caducó. Vuelve a la página e inténtalo de nuevo. | RN-170 |
+| MSG-48 | Tu sesión terminó. Inicia sesión para continuar. | RN-171 |
+| MSG-49 | Gasto guardado. | RN-172 |
+| MSG-50 | Ingreso guardado. | RN-172 |
+| MSG-51 | Cambios guardados. | RN-172 |
+| MSG-52 | Movimiento eliminado. | RN-172, RN-178 |
+| MSG-53 | Presupuesto guardado. | RN-172 |
+</contexto>
+<tarea>
+Genera un prototipo visual de esta pantalla como un artifact HTML/CSS/JS 
+interactivo. Debe:
+1. Reflejar fielmente el wireframe textual.
+2. Incluir datos de ejemplo realistas (no lorem ipsum).
+3. Ser responsive (funcionar en móvil y desktop).s
+4. Incluir estados: vacío, con datos, error, loading.
+5. Usar los design tokens definidos.
+</tarea>
+<restricciones>
+    - NO es código de producción: es un prototipo para validar con stakeholders.
+    - Priorizar claridad del flujo sobre pixel-perfection.
+    - Incluir interacciones básicas (clics, navegación simulada, validaciones).
+    - Si una sección depende de datos dinámicos, usar datos ficticios del caso.
+</restricciones>
+]]></prompt>
+  </paso>
+  <salida archivo="prototipos/P-006-lista-de-movimientos.html" tipo="artifact HTML/CSS/JS interactivo" insumo_de="Agente Prototype Reviewer"/>
+</ejecucion_bmad>

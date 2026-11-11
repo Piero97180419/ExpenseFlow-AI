@@ -1,0 +1,627 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ejecucion_bmad documento="09-ui-spec.md" pantalla="P-002" version="v1.0" fecha="2026-11-11" proyecto="ExpenseFlow AI">
+  <paso numero="1" agente="Prototipo Visual">
+    <prompt><![CDATA[
+<agente>
+Eres un desarrollador frontend senior. Tu trabajo es convertir un 
+wireframe textual en un prototipo visual interactivo.
+</agente>
+<contexto>
+Estoy prototipando la pantalla P-002 — Iniciar sesión de ExpenseFlow AI.
+--- SCREEN SPEC --
+### P-002 — Iniciar sesión
+
+| Campo | Valor |
+|---|---|
+| Propósito | Acceder con correo y contraseña |
+| Actor | Usuario registrado |
+| HU | HU-002A (y destino de HU-002B al cerrar sesión o expirar) |
+| Reglas | RN-006, RN-048, RN-049, RN-050, RN-097, RN-098, RN-116, RN-144, RN-145, RN-146, RN-147, RN-154, RN-155, RN-168, RN-170, RN-171, RN-173, RN-174, RN-177 |
+| Layout | CMP-02 |
+
+**Campos (solo 2, sin «Recordarme», sin «¿Olvidaste tu contraseña?»):**
+
+| Etiqueta | Control | Atributos | Errores |
+|---|---|---|---|
+| «Correo» | `<input type="text">` | `inputmode="email"`, `autocomplete="username"`, `autocapitalize="none"`, `spellcheck="false"` | MSG-32 |
+| «Contraseña» | `<input type="password">` | `autocomplete="current-password"` | MSG-34 |
+
+- Credenciales incorrectas, correo inexistente o cuenta bloqueada ⇒ **un único** mensaje MSG-02 en un bloque de error **sobre** el formulario (no bajo un campo, para no indicar cuál falló). El bloque tiene `role="alert"`.
+- `returnUrl` va en un campo oculto y **se conserva en cada nueva presentación** del formulario tras MSG-02, MSG-32 o MSG-34 (DEC-72). El servidor lo valida (RN-155) y, si apunta a una ruta que solo admite `POST`, redirige a la página del formulario (RN-174).
+- El correo se compara sin espacios exteriores (DEC-82).
+- **Aviso de sesión expirada:** si la llegada es por expiración (`reason=expired`), sobre el formulario se muestra MSG-48 en un bloque informativo con `role="status"` y estilo `--ef-info-bg` / `--ef-info-text` (RN-171). No aparece tras «Cerrar sesión» ni en el primer acceso.
+- Un usuario con sesión que abre esta pantalla va a `/dashboard` (RN-173).
+- **Limitación aceptada (W17):** no hay recuperación de contraseña.
+
+**Acciones:** «Iniciar sesión» (CMP-10, primario, ancho completo, «Iniciando sesión…» al enviar); enlace «¿No tienes cuenta? Crea una» → P-001.
+
+**Wireframe (360 px):**
+
+```
+┌────────────────────────────────────────┐
+│ ExpenseFlow AI                          │
+├────────────────────────────────────────┤
+│ ┌────────────────────────────────────┐ │
+│ │ <h1> Iniciar sesión                │ │
+│ │                                    │ │
+│ │ ┌ role="status" (info) ──────────┐ │ │ solo si la sesión expiró
+│ │ │ ℹ MSG-48                        │ │ │
+│ │ └────────────────────────────────┘ │ │
+│ │ ┌ alert-danger role="alert" ─────┐ │ │ solo tras un intento fallido
+│ │ │ ⚠ MSG-02                        │ │ │
+│ │ └────────────────────────────────┘ │ │
+│ │                                    │ │
+│ │ Correo                             │ │
+│ │ ┌────────────────────────────────┐ │ │
+│ │ └────────────────────────────────┘ │ │
+│ │ Contraseña                         │ │
+│ │ ┌────────────────────────────────┐ │ │
+│ │ └────────────────────────────────┘ │ │
+│ │                                    │ │
+│ │ ┌────────────────────────────────┐ │ │
+│ │ │         Iniciar sesión         │ │ │ btn-primary, w-100, 48 px
+│ │ └────────────────────────────────┘ │ │
+│ │ ¿No tienes cuenta? Crea una        │ │
+│ └────────────────────────────────────┘ │
+└────────────────────────────────────────┘
+```
+
+**Estados:** inicial; MSG-02 (bloque `role="alert"`, correo conservado, contraseña vacía, foco en «Contraseña», `returnUrl` conservado); campos vacíos (MSG-32 y MSG-34 a la vez, cada uno bajo su campo, con CMP-04 arriba); llegada tras cerrar sesión (sin mensaje); llegada por expiración (MSG-48); enviando (CMP-10).
+
+--- Reglas comunes a todas las pantallas (09 §3.0) ---
+### 3.0 Reglas comunes a todas las pantallas
+
+Estas reglas aplican a todas las pantallas y no se repiten en cada ficha.
+
+**Documento y semántica (PRINCIPIO-001, PRINCIPIO-012)**
+
+- `<html lang="es-PE">`, `<meta name="viewport" content="width=device-width, initial-scale=1">` (sin `maximum-scale` ni `user-scalable=no`).
+- `<title>` único: «`<Nombre de la pantalla>` — ExpenseFlow AI».
+- Primer elemento enfocable: enlace «Saltar al contenido principal» (visible al recibir foco) que lleva a `<main id="contenido">`.
+- Landmarks: `<header>`, `<nav aria-label="Principal">` (solo con sesión), `<main id="contenido">`, `<footer>`.
+- Un único `<h1>` por pantalla. Sin saltos de nivel de encabezado.
+- Ningún texto en inglés visible ni en atributos accesibles (`aria-label`, `title`, `alt`, `placeholder`).
+
+**Formularios (PRINCIPIO-012, ADR-006)**
+
+- `<form method="post" novalidate>` con el token antiforgery de Razor.
+- Cada campo usa CMP-03: `<label for>` visible siempre (nunca solo `placeholder`).
+- Error de un campo: texto bajo el campo, con icono SVG decorativo (`aria-hidden="true"`) **y** el texto del mensaje; el campo recibe `aria-invalid="true"` y `aria-describedby` apunta al `id` del error (y al de la ayuda, si hay). El borde rojo nunca es la única señal.
+- Si hay errores de campo, el formulario muestra arriba CMP-04 y el **primer campo con error** lleva el atributo `autofocus` (lo pone Razor, funciona sin JS). CMP-04 no recibe el foco (DEC-78).
+- **Errores que no son de un campo** (MSG-02, MSG-21, MSG-22): se muestran en un bloque propio sobre el formulario, con `role="alert"` y estilo `--ef-danger-bg`, sin CMP-04 y sin `aria-invalid` en los campos (DEC-80). Si además hay errores de campo, se muestran ambos.
+- Todo botón de envío de formulario usa CMP-10 (DEC-74).
+- Tras un error, el servidor vuelve a mostrar lo que el usuario escribió (salvo contraseñas).
+- Los campos de radio se agrupan en `<fieldset>` con `<legend>`; el error del grupo se asocia al `<fieldset>` con `aria-describedby`.
+
+**Mensajes de confirmación (RN-172)**
+
+- Tras guardar o eliminar, la página de destino muestra **una sola vez** la confirmación (MSG-49 a MSG-53), al inicio de `<main>`, en un bloque con `role="status"`, estilo `--ef-success-bg` / `--ef-success-text` y un icono decorativo. Llega por TempData: al recargar, ya no aparece.
+- El bloque no recibe el foco ni se cierra solo; desaparece en la siguiente navegación.
+
+**Mejora progresiva (DP-4)**
+
+- Toda pantalla funciona igual sin JavaScript, salvo: deshabilitar el botón al enviar (RN-131, RN-168), mostrar u ocultar «Descripción» en ingresos y el diálogo de eliminación. Cada uno tiene su comportamiento sin JS documentado en su ficha.
+- `site.js` se carga con `defer` al final del `<body>`.
+
+**Tamaños mínimos (WCAG 2.2, 2.5.8)**
+
+- Toda área interactiva mide al menos 44 × 44 px (el mínimo AA es 24 × 24; se usa 44 por el contexto Android).
+- El foco es siempre visible (token `--ef-focus-ring`) y no queda tapado por la cabecera (2.4.11): la cabecera **no es fija** (`position: static`).
+
+**Montos**
+
+- Columna o bloque de montos con `font-variant-numeric: tabular-nums` y alineado a la derecha en listas.
+- El tipo de movimiento siempre se dice en texto («Gasto» / «Ingreso»), no solo con color.
+
+--- Componentes que usa la pantalla ---
+### CMP-02 — Layout público
+
+**Propósito:** marco de registro, inicio de sesión y páginas de error.
+**HU:** HU-001, HU-002A.
+
+```
+┌────────────────────────────────────────┐
+│ [Saltar al contenido principal]        │
+├────────────────────────────────────────┤ <header> fondo --ef-color-primary
+│ ExpenseFlow AI                          │ texto, no enlace si no hay sesión
+├────────────────────────────────────────┤
+│ <main>  tarjeta centrada, máx. 440 px   │
+├────────────────────────────────────────┤
+│ <footer> igual que CMP-01              │
+└────────────────────────────────────────┘
+```
+
+Sin `<nav>`. El fondo de la página es `--ef-color-bg` y el formulario va en una tarjeta `--ef-color-surface`.
+
+### CMP-03 — Campo con etiqueta, ayuda y error
+
+**Usado en:** todos los formularios. **HU:** HU-001, HU-003, HU-004, HU-007. **Reglas:** RN-116.
+
+```html
+<div class="ef-field">
+  <label for="Amount" class="form-label">Monto</label>
+  <input id="Amount" name="Amount" class="form-control"
+         aria-describedby="Amount-help Amount-error" aria-invalid="true">
+  <p id="Amount-help" class="ef-help">…</p>          <!-- solo si hay ayuda -->
+  <p id="Amount-error" class="ef-error">              <!-- solo si hay error -->
+    <svg aria-hidden="true" …></svg> El monto debe tener como máximo dos decimales.
+  </p>
+</div>
+```
+
+| Parte | Regla |
+|---|---|
+| Etiqueta | `<label for>` visible siempre, 1rem / 600. Nunca se reemplaza por `placeholder` |
+| Ayuda | Opcional, bajo el campo, 0.875rem `--ef-color-text-muted`, con `id="<Campo>-help"` |
+| Error | Bajo la ayuda, `--ef-color-danger`, icono decorativo + texto del MSG, con `id="<Campo>-error"`. Solo se muestra el primer error del campo según el orden de su regla |
+| `aria-describedby` | Lista la ayuda y el error presentes, en ese orden |
+| `aria-invalid` | `true` solo si el campo tiene error |
+| Borde | 1 px `--ef-color-border`; con error, 2 px `--ef-color-danger` (nunca es la única señal) |
+| Grupo de radios | El mismo patrón sobre el `<fieldset>` (CMP-06) |
+
+### CMP-04 — Resumen de errores
+
+```
+┌ div role="alert" class="ef-error-summary" ──────────────┐  fondo --ef-danger-bg, borde izq. 4 px
+│ ⚠ Revisa los datos ingresados.                          │  MSG-44, 600
+│   • MSG-11  ← enlace a #Amount                          │  lista de enlaces a cada campo con error
+│   • MSG-12  ← enlace a #Category-legend                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+- Sin `tabindex`: el foco va al primer campo con error, no al resumen (DEC-78). `role="alert"` hace que el lector de pantalla lo anuncie al cargar.
+- Solo agrupa errores de campo; los que no son de un campo van en su propio bloque (§3.0, DEC-80).
+
+### CMP-10 — Botón de envío con estado «enviando»
+
+- Botón `<button type="submit" data-disable-on-submit data-submitting-text="…">` con texto de reposo (ADR-006, punto 3). `site.js` solo actúa sobre botones con `data-disable-on-submit`.
+- `site.js`: en el evento `submit` del formulario, si no hay otro envío en curso, pone `disabled` y `aria-disabled="true"`, cambia el texto al de envío y escribe el mismo texto en una región `aria-live="polite"` del formulario. Un segundo `submit` se cancela con `preventDefault()`.
+- `pageshow` con `event.persisted` (volver con «Atrás» desde la caché del navegador) restaura el botón.
+- Lo exigen RN-131 y RN-168; en P-001, P-002, P-009 y P-010 lo aplica DEC-74.
+
+| Formulario | Texto en reposo | Texto al enviar |
+|---|---|---|
+| P-001 | «Crear cuenta» | «Creando cuenta…» `[Propuesta]` |
+| P-002 | «Iniciar sesión» | «Iniciando sesión…» `[Propuesta]` |
+| P-004 | «Guardar gasto» | «Guardando…» `[Propuesta]` |
+| P-005 | «Guardar ingreso» | «Guardando…» `[Propuesta]` |
+| P-007 | «Guardar cambios» | «Guardando…» `[Propuesta]` |
+| P-009 | «Guardar presupuesto» | «Guardando…» `[Propuesta]` |
+| P-010 | «Guardar cambios» | «Guardando…» `[Propuesta]` |
+| P-003 IA | «Generar resumen del mes» | «Generando resumen…» (HU-010A) |
+--- DESIGN TOKENS --
+## 4. Design tokens
+
+Los tokens se definen como variables CSS en `wwwroot/css/site.css`, cargado **después** de `bootstrap.min.css`. Los que tienen equivalente en Bootstrap se asignan también a `--bs-*`.
+
+### 4.1 Colores
+
+Todos los contrastes están calculados con la fórmula de WCAG 2.2.
+
+| Token | Valor | Uso | Contraste verificado |
+|---|---|---|---|
+| `--ef-color-primary` | `#0B5C8A` | Botones primarios, enlaces, cabecera, barra normal | Blanco sobre él 7.21:1; sobre `--ef-color-bg` 6.72:1 |
+| `--ef-color-primary-hover` | `#084A6F` | Hover y activo del primario | Blanco sobre él 9.46:1 |
+| `--ef-primary-subtle` | `#E8F2F9` | Fondo de opción seleccionada, aviso informativo | `#0B4F75` sobre él 7.74:1 |
+| `--ef-color-secondary` | `#475467` | Botones secundarios, insignias «Gasto»/«Ingreso» | Blanco sobre él 7.69:1 |
+| `--ef-color-accent` | `#0F6E5C` | Borde del bloque de IA, detalles de marca | Sobre blanco 6.17:1 |
+| `--ef-color-bg` | `#F5F7FA` | Fondo de página | — |
+| `--ef-color-surface` | `#FFFFFF` | Tarjetas, formularios, diálogos | — |
+| `--ef-color-text` | `#1A1F29` | Texto principal | Sobre blanco 16.51:1; sobre fondo 15.38:1 |
+| `--ef-color-text-muted` | `#4B5565` | Ayudas, leyendas, pie | Sobre blanco 7.54:1; sobre fondo 7.02:1 |
+| `--ef-color-border` | `#6B7280` | Bordes de campos, mosaicos y barra (componentes) | Sobre blanco 4.83:1 (≥ 3:1, WCAG 1.4.11) |
+| `--ef-color-divider` | `#E4E8EE` | Separadores decorativos y pista de la barra | Decorativo; no transmite información |
+| `--ef-color-danger` | `#B42318` | Texto de error, saldo negativo | Sobre blanco 6.57:1 |
+| `--ef-danger-bg` / `--ef-danger-text` | `#FEF0EE` / `#912018` | Aviso del 100 %, resumen de errores | 7.80:1 |
+| `--ef-warning-bg` / `--ef-warning-text` | `#FFF4E0` / `#7A3E00` | Aviso del 80 %, MSG-23 | 7.66:1 |
+| `--ef-success-bg` / `--ef-success-text` | `#ECF7EF` / `#1F6E37` | Confirmaciones MSG-49 a MSG-53 (RN-172) | 5.72:1 |
+| `--ef-info-bg` / `--ef-info-text` | `#E8F2F9` / `#0B4F75` | Aviso de datos ficticios, MSG-48 | 7.74:1 |
+| `--ef-progress-normal` | `#0B5C8A` | Barra < 80 % | Sobre la pista 5.86:1 |
+| `--ef-progress-warning` | `#B45309` | Barra 80 %–<100 % | Sobre la pista 4.08:1 (≥ 3:1) |
+| `--ef-progress-danger` | `#B42318` | Barra ≥ 100 % | Sobre la pista 5.35:1 |
+| `--ef-focus-ring` | `0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A` | Indicador de foco (doble anillo: visible sobre fondos claros y sobre la cabecera azul) | Azul sobre fondo 6.72:1 |
+
+**Reglas de uso del color:**
+
+- Sin modo oscuro en el MVP: `color-scheme: light` en `:root`.
+- El rojo, el ámbar y el verde nunca son la única señal: siempre van con texto (y un icono decorativo).
+- Los importes se escriben en `--ef-color-text`, salvo el saldo negativo (`--ef-color-danger` + texto).
+
+### 4.2 Tipografía
+
+| Token | Valor |
+|---|---|
+| `--ef-font-family` | `system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif` (Roboto en Android) |
+| `--ef-font-numeric` | `font-variant-numeric: tabular-nums` en importes, fechas y porcentajes |
+| Tamaño base | `16px` (`1rem`); los campos nunca bajan de 16 px (evita el zoom automático en móviles) |
+| Interlineado | `1.5` en general, `1.6` en el texto de la IA |
+
+| Estilo | Móvil | ≥ 768 px | Peso | Uso |
+|---|---|---|---|---|
+| `h1` | 1.5rem | 1.75rem | 700 | Título de pantalla |
+| `h2` | 1.125rem | 1.25rem | 600 | Título de sección |
+| Importe destacado | 1.75rem | 2rem | 700 | Saldo del mes |
+| Importe secundario | 1.25rem | 1.25rem | 700 | Saldo acumulado |
+| Cuerpo | 1rem | 1rem | 400 | Texto, valores |
+| Etiqueta | 1rem | 1rem | 600 | `<label>`, `<legend>` |
+| Pequeño | 0.875rem | 0.875rem | 400 | Ayudas, leyendas, pie |
+
+El texto debe seguir siendo legible con zoom al 200 % y con espaciado de texto aumentado (WCAG 1.4.4, 1.4.12): sin alturas fijas en contenedores de texto.
+
+### 4.3 Espaciado, formas y tamaños
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--ef-space-1` … `--ef-space-6` | 4, 8, 12, 16, 24, 32 px | Escala de márgenes y padding |
+| Gutter lateral | 16 px | Contenedor en móvil |
+| `--ef-radius` | 0.5rem (8 px) | Tarjetas, campos, botones, mosaicos |
+| `--ef-radius-sm` | 0.25rem | Insignias |
+| Sombra de tarjeta | `0 1px 2px rgba(16, 24, 40, .08)` | Solo tarjetas |
+| Ancho máx. de formularios | 560 px | P-004, P-005, P-007, P-009, P-010 |
+| Ancho máx. de autenticación | 440 px | P-001, P-002 |
+| Contenedor del dashboard | 1140 px | P-003, P-006 |
+
+| Componente | Alto mínimo | Notas |
+|---|---|---|
+| Botón primario de formulario | 56 px | Ancho completo en móvil |
+| Botón normal / enlace de navegación | 48 px | |
+| Botón de fila («Editar», «Eliminar») | 44 px | `min-width: 44px` |
+| Campo de texto / fecha | 48 px (Monto: 56 px) | Padding horizontal 12 px |
+| Mosaico de opción | 56 px | |
+| Casilla de verificación | 24 × 24 px dentro de un área clicable de 44 px | |
+| Barra de progreso | 16 px | |
+| Fila de movimiento | 56 px | |
+
+### 4.4 Puntos de quiebre
+
+Los de Bootstrap 5, diseñando primero para 360 px (RC-1, T4):
+
+| Nombre | Desde | Cambios principales |
+|---|---|---|
+| base | 0 (diseño a 360 px) | Una columna; botones a ancho completo |
+| `sm` | 576 px | Categorías en 3 columnas; filas de movimiento en una línea |
+| `md` | 768 px | Cabecera y navegación en una franja |
+| `lg` | 992 px | Dashboard en dos columnas |
+
+### 4.5 Ejemplo de `site.css` (cabecera de tokens)
+
+```css
+:root {
+  color-scheme: light;
+  --ef-color-primary: #0B5C8A;
+  --ef-color-primary-hover: #084A6F;
+  --ef-primary-subtle: #E8F2F9;
+  --ef-color-secondary: #475467;
+  --ef-color-accent: #0F6E5C;
+  --ef-color-bg: #F5F7FA;
+  --ef-color-surface: #FFFFFF;
+  --ef-color-text: #1A1F29;
+  --ef-color-text-muted: #4B5565;
+  --ef-color-border: #6B7280;
+  --ef-color-divider: #E4E8EE;
+  --ef-color-danger: #B42318;
+  --ef-danger-bg: #FEF0EE;   --ef-danger-text: #912018;
+  --ef-warning-bg: #FFF4E0;  --ef-warning-text: #7A3E00;
+  --ef-success-bg: #ECF7EF;  --ef-success-text: #1F6E37;
+  --ef-info-bg: #E8F2F9;     --ef-info-text: #0B4F75;
+  --ef-progress-normal: #0B5C8A;
+  --ef-progress-warning: #B45309;
+  --ef-progress-danger: #B42318;
+  --ef-focus-ring: 0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A;
+  --ef-radius: .5rem;
+
+  /* Puente con Bootstrap 5 */
+  --bs-primary: var(--ef-color-primary);
+  --bs-primary-rgb: 11, 92, 138;
+  --bs-body-bg: var(--ef-color-bg);
+  --bs-body-color: var(--ef-color-text);
+  --bs-border-color: var(--ef-color-border);
+  --bs-border-radius: var(--ef-radius);
+  --bs-link-color: var(--ef-color-primary);
+  --bs-link-hover-color: var(--ef-color-primary-hover);
+  --bs-body-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+}
+.btn-primary {
+  --bs-btn-bg: var(--ef-color-primary);
+  --bs-btn-border-color: var(--ef-color-primary);
+  --bs-btn-hover-bg: var(--ef-color-primary-hover);
+  --bs-btn-hover-border-color: var(--ef-color-primary-hover);
+  --bs-btn-active-bg: var(--ef-color-primary-hover);
+}
+:focus-visible { outline: none; box-shadow: var(--ef-focus-ring); }
+.ef-amount { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+```
+--- REGLAS DE NEGOCIO RELEVANTES --
+**RN-006** | Categoría: Seguridad | Prioridad: MUST | Fuente: PRINCIPIO-008
+
+Patrón EARS: Ubiquitous
+
+El sistema NO DEBE escribir contraseñas en ningún log.
+
+✅ **Ejemplo:** Tras un inicio de sesión fallido, el log registra `Failed login attempt for user 7c9e6679-…`.
+
+❌ **Contraejemplo:** El log registra `Login: demo1@expenseflow.test Demo#2026x`.
+
+**RN-048** | Categoría: Seguridad | Prioridad: MUST | Fuente: DEC-09 · PRINCIPIO-008
+
+Patrón EARS: Unwanted
+
+SI un usuario acumula 5 intentos fallidos consecutivos de inicio de sesión, ENTONCES el sistema DEBE bloquear su cuenta durante 5 minutos.
+
+✅ **Ejemplo:** `demo1` falla 5 veces y el quinto fallo ocurre el 2026-11-08 a las 10:01:00. Con la contraseña correcta, el intento de las 10:03:00 se rechaza y el de las 10:06:01 se acepta.
+
+❌ **Contraejemplo:** Tras el quinto fallo se permite un sexto intento a las 10:01:30, o el bloqueo dura 15 minutos.
+
+> Configuración: `MaxFailedAccessAttempts = 5`, `DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5)`, `AllowedForNewUsers = true`. Incremento del contador: RN-144.
+
+**RN-049** | Categoría: Seguridad | Prioridad: MUST | Fuente: DEC-09
+
+Patrón EARS: Event-driven
+
+CUANDO un usuario inicia sesión con éxito, el sistema DEBE reiniciar a 0 su contador de intentos fallidos.
+
+✅ **Ejemplo:** `demo1` falla 3 veces, inicia sesión con éxito, cierra sesión y falla 2 veces más: la cuenta no se bloquea (contador = 2).
+
+❌ **Contraejemplo:** En la misma secuencia la cuenta se bloquea porque el contador llegó a 5.
+
+**RN-050** | Categoría: Seguridad | Prioridad: MUST | Fuente: DEC-09 · DEC-29
+
+Patrón EARS: Unwanted
+
+SI un inicio de sesión falla por cualquier causa, incluida una cuenta bloqueada, ENTONCES el sistema DEBE mostrar el mensaje MSG-02.
+
+✅ **Ejemplo:** Se muestra «No se pudo iniciar sesión. Verifica tu correo y contraseña, o inténtalo de nuevo en unos minutos.» en tres casos: `noexiste@expenseflow.test`, `demo1@expenseflow.test` con contraseña incorrecta y `demo1@expenseflow.test` bloqueado.
+
+❌ **Contraejemplo:** Para el correo no registrado se muestra «No existe una cuenta con ese correo», o la cuenta bloqueada redirige a la página `Lockout` de la plantilla de Identity.
+
+> Un envío con el correo o la contraseña vacíos no es un intento de inicio de sesión: se aplica RN-154.
+>
+> **Motivo:** el texto menciona «unos minutos» para orientar al usuario bloqueado sin revelar el estado de la cuenta.
+
+**RN-097** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-48
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario pulsa «Cerrar sesión», el sistema DEBE eliminar la cookie de autenticación del navegador.
+
+✅ **Ejemplo:** Tras cerrar sesión, el navegador ya no tiene la cookie: `GET /dashboard` redirige a la página de inicio de sesión y `GET /api/dashboard` responde `401`.
+
+❌ **Contraejemplo:** Tras cerrar sesión, el navegador conserva la cookie y el usuario puede seguir registrando gastos.
+
+> Después de cerrar sesión se muestra la página de inicio de sesión. Que el botón «Atrás» no muestre datos se garantiza con RN-140.
+>
+> **Limitación aceptada (DEC-48):** la cookie es autocontenida. Una copia capturada antes del cierre sigue siendo válida hasta su expiración (RN-098). Se acepta en el MVP porque solo hay datos ficticios (PRINCIPIO-006).
+
+> Si la sesión ya no es vigente al pulsar «Cerrar sesión», se aplica RN-177.
+
+**RN-098** | Categoría: Seguridad | Prioridad: MUST | Fuente: Decisión del equipo · DEC-49
+
+Patrón EARS: Unwanted
+
+SI una solicitud autenticada llega después del instante de expiración de su cookie de autenticación, ENTONCES el sistema DEBE rechazarla como no autenticada.
+
+✅ **Ejemplo:** `demo1` inicia sesión a las 10:00 (la cookie expira a las 11:00). La solicitud de las 10:20 no renueva la cookie, porque no pasó la mitad de la ventana. La de las 10:40 sí la renueva y la expiración pasa a las 11:40. La solicitud de las 11:41 se rechaza: en MVC redirige al inicio de sesión y en la API responde `401`.
+
+❌ **Contraejemplo:** La solicitud de las 11:41 se acepta, o la sesión sigue válida al día siguiente.
+
+> La cookie expira 60 minutos después de emitirse o de su última renovación. Se renueva con la primera solicitud autenticada que llega pasada la mitad de la ventana (30 minutos). Por eso la sesión expira **entre 30 y 60 minutos sin actividad** (DEC-49). «Actividad» = cualquier solicitud autenticada. Configuración: `ExpireTimeSpan = TimeSpan.FromMinutes(60)`, `SlidingExpiration = true`.
+>
+> **Limitación aceptada (DEC-59):** si la sesión expira mientras el usuario llena un formulario, al enviarlo se le redirige al inicio de sesión, no se guarda nada y lo escrito se pierde. Tras iniciar sesión vuelve al formulario vacío (RN-155).
+
+> Al volver a la página de inicio de sesión por expiración se muestra MSG-48 (RN-171).
+
+**RN-116** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-012 · Decisión del equipo
+
+Patrón EARS: Unwanted
+
+SI una validación de las secciones 1, 3 o 4 rechaza un dato, ENTONCES el sistema DEBE mostrar el mensaje de la sección 10 que corresponde a esa regla, junto al campo afectado.
+
+✅ **Ejemplo:** El usuario ingresa la fecha `2026-11-09` el 2026-11-08; bajo el campo Fecha aparece «La fecha no puede ser posterior a hoy.» (MSG-10), vinculado con `aria-describedby`.
+
+❌ **Contraejemplo:** Aparece «Datos inválidos» en la parte superior del formulario, o un mensaje en inglés generado por la validación por defecto.
+
+> La API REST devuelve `400` con un `ValidationProblemDetails` cuyo diccionario `errors` usa los mismos textos, con el nombre del campo en `camelCase` como clave (ADR-004, sección 3.1).
+
+> Tras un error, el foco va al primer campo con error; el resumen de errores (MSG-44) no recibe foco (DEC-78). Los errores que no son de un campo (MSG-02, MSG-21, MSG-22) se muestran en un bloque propio con `role="alert"` sobre el formulario (DEC-80).
+
+**RN-131** | Categoría: UX | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS una solicitud de resumen esté en curso, el sistema DEBE mostrar el botón «Generar resumen del mes» deshabilitado con el texto «Generando resumen…».
+
+✅ **Ejemplo:** El usuario pulsa el botón dos veces seguidas; se envía 1 sola solicitud a Ollama.
+
+❌ **Contraejemplo:** Cada pulsación envía una solicitud nueva y el modelo procesa 2 en paralelo.
+
+> El texto «Generando resumen…» se anuncia con `aria-live="polite"`.
+
+> Sin JavaScript el botón no se deshabilita y un segundo envío es posible (limitación aceptada, DEC-90).
+
+**RN-144** | Categoría: Seguridad | Prioridad: MUST | Fuente: PRINCIPIO-008 · Decisión del equipo
+
+Patrón EARS: Event-driven
+
+CUANDO un intento de inicio de sesión con contraseña falla para una cuenta existente, el sistema DEBE incrementar en 1 su contador de intentos fallidos.
+
+✅ **Ejemplo:** `demo1` falla 2 veces: `AccessFailedCount = 2` en `AspNetUsers`.
+
+❌ **Contraejemplo:** Tras 10 fallos, `AccessFailedCount` sigue en 0 y la cuenta nunca se bloquea.
+
+> Implementación: `PasswordSignInAsync(..., lockoutOnFailure: true)`. La plantilla de Identity usa `false` por defecto. Bloqueo: RN-048.
+
+**RN-145** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1, W13, W17, W18, W19 · Decisión del equipo
+
+Patrón EARS: Ubiquitous
+
+El sistema NO DEBE exponer páginas ni endpoints de cuenta distintos del registro, el inicio de sesión y el cierre de sesión.
+
+✅ **Ejemplo:** `GET /Identity/Account/ForgotPassword` y `GET /Identity/Account/Manage` responden `404`.
+
+❌ **Contraejemplo:** La aplicación publica las páginas de la plantilla de Identity para recuperar la contraseña, cambiar el correo, activar la autenticación en dos pasos o descargar y borrar datos personales.
+
+> No se usa `Microsoft.AspNetCore.Identity.UI` (ADR-001). Las vistas del módulo `Accounts` son vistas MVC propias (ADR-004).
+>
+> Rutas (DEC-63): `GET/POST /account/register`, `GET/POST /account/login` y `POST /account/logout` (`07` §4.9). Cualquier otra ruta de cuenta responde `404` (RN-169).
+
+**RN-146** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance W20 · Decisión del equipo
+
+Patrón EARS: Ubiquitous
+
+El formulario de inicio de sesión NO DEBE ofrecer la opción «Recordarme».
+
+✅ **Ejemplo:** El formulario tiene solo los campos Correo y Contraseña y el botón «Iniciar sesión».
+
+❌ **Contraejemplo:** El formulario muestra la casilla «Recordarme».
+
+**RN-147** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance W20 · Decisión del equipo
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE emitir la cookie de autenticación como cookie no persistente.
+
+✅ **Ejemplo:** La cabecera `Set-Cookie` de la cookie de autenticación no tiene `Expires` ni `Max-Age`; al cerrar todas las ventanas del navegador y volver a abrirlo, se pide iniciar sesión.
+
+❌ **Contraejemplo:** La cookie tiene `Expires` y sobrevive al cierre del navegador.
+
+> Implementación: `isPersistent: false`. La expiración de RN-098 se aplica igual, porque va dentro del ticket de autenticación.
+
+**RN-154** | Categoría: UX | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Unwanted
+
+SI el formulario de inicio de sesión se envía con el correo o la contraseña vacíos, ENTONCES el sistema DEBE mostrar el mensaje del campo vacío sin intentar el inicio de sesión.
+
+✅ **Ejemplo:** Con la contraseña vacía, bajo el campo aparece «Ingresa tu contraseña.» (MSG-34) y `AccessFailedCount` no cambia.
+
+❌ **Contraejemplo:** Se muestra MSG-02, o el envío vacío cuenta como intento fallido para el bloqueo.
+
+> Mensajes: MSG-32 y MSG-34.
+
+> El correo se compara sin espacios exteriores, igual que en el registro (DEC-82).
+
+**RN-155** | Categoría: Seguridad | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario inicia sesión con éxito, el sistema DEBE redirigirlo a la dirección de retorno solo si es local a la aplicación, y en otro caso al dashboard.
+
+✅ **Ejemplo:** Con `returnUrl=/transactions`, el usuario llega a la lista de movimientos. Con `returnUrl=https://sitio-externo.example`, llega a `/dashboard`.
+
+❌ **Contraejemplo:** El sistema redirige a `https://sitio-externo.example`.
+
+> Implementación: `Url.IsLocalUrl(returnUrl)` y `LocalRedirect`.
+
+> El `returnUrl` viaja en un campo oculto del formulario y se conserva en cada nueva presentación tras un error (DEC-72). Si apunta a una ruta que solo admite `POST`, se aplica RN-174.
+
+**RN-168** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M3 · DEC-57
+
+Patrón EARS: State-driven
+
+MIENTRAS se envía el formulario «Nuevo gasto», «Nuevo ingreso» o de edición de un movimiento, el sistema DEBE mostrar su botón de envío deshabilitado.
+
+✅ **Ejemplo:** Con la respuesta del servidor retrasada, el usuario pulsa «Guardar gasto» dos veces seguidas: el botón queda deshabilitado tras la primera pulsación y se crea 1 solo gasto.
+
+❌ **Contraejemplo:** Cada pulsación envía el formulario y se crean dos gastos iguales.
+
+> Se implementa como mejora progresiva con JavaScript (ADR-006). Si la respuesta vuelve con errores de validación, la página se recarga con el botón habilitado. Sin JavaScript, o si se pierde la respuesta y el usuario vuelve a enviar, el doble envío sigue siendo posible: limitación aceptada (DEC-57). En el resumen de IA se aplica RN-131.
+
+> Los formularios de registro, inicio de sesión y presupuesto también deshabilitan su botón mientras se envían, con el mismo mecanismo (DEC-74).
+
+**RN-170** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-001 · DEC-71
+
+Patrón EARS: Unwanted
+
+SI una solicitud `POST` a las vistas MVC llega con un token antiforgery no válido, ENTONCES el sistema DEBE responder `400` con una página en español que muestre MSG-46 y el enlace «Volver al inicio», sin modificar datos.
+
+✅ **Ejemplo:** Un visitante abre «Crear cuenta», inicia sesión en otra pestaña y luego envía el registro: ve «Tu formulario caducó. Vuelve a la página e inténtalo de nuevo.» y no se crea la cuenta.
+
+❌ **Contraejemplo:** La respuesta `400` llega sin contenido, con un texto en inglés, o con la traza del error.
+
+> La página usa el layout público, no consulta la base de datos y no requiere sesión. «Volver al inicio» lleva a `/dashboard` (o al inicio de sesión si no hay sesión). En la API, el `400` de antiforgery sigue usando el `ProblemDetails` estándar (ADR-004 §3.1).
+
+**RN-171** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M1 · DEC-81
+
+Patrón EARS: Event-driven
+
+CUANDO el sistema muestra la página de inicio de sesión porque la sesión del usuario expiró, el sistema DEBE mostrar el aviso MSG-48 sobre el formulario.
+
+✅ **Ejemplo:** `demo1` inicia sesión a las 10:00 y no hace nada hasta las 11:41; al pulsar «Guardar gasto» llega al inicio de sesión y ve «Tu sesión terminó. Inicia sesión para continuar.».
+
+❌ **Contraejemplo:** El aviso aparece al abrir la aplicación por primera vez, o después de pulsar «Cerrar sesión».
+
+> La expiración se detecta con una cookie de marca no persistente (`ef_session`, `HttpOnly`, `Secure`, sin datos del usuario) que se emite al iniciar sesión y se elimina al cerrar sesión. Si una ruta protegida recibe la marca sin una cookie de autenticación válida, la redirección al inicio de sesión agrega `reason=expired` y el sistema elimina la marca.
+
+> El aviso es informativo: se muestra con `role="status"` y no reemplaza a MSG-02.
+
+**RN-173** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-73
+
+Patrón EARS: Event-driven
+
+CUANDO un usuario con sesión iniciada envía una solicitud a `/account/register` o a `/account/login`, el sistema DEBE redirigirlo a `/dashboard` sin procesar la solicitud.
+
+✅ **Ejemplo:** `demo1`, con sesión iniciada, vuelve con «Atrás» a «Crear cuenta»: llega a `/dashboard` y no se crea ninguna cuenta.
+
+❌ **Contraejemplo:** El usuario con sesión envía el formulario de registro y se crea una segunda cuenta que reemplaza su sesión.
+
+**RN-174** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-70
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario inicia sesión con una dirección de retorno local que corresponde a una ruta que solo admite `POST`, el sistema DEBE redirigirlo a la página desde la que se envía ese formulario.
+
+✅ **Ejemplo:** La sesión de `demo1` expiró y pulsó «Generar resumen del mes»: tras iniciar sesión llega a `/dashboard`, no a `GET /insights/monthly-summary`.
+
+❌ **Contraejemplo:** Tras iniciar sesión, el navegador pide `GET /insights/monthly-summary` y recibe `404` o `405`.
+
+> Rutas que solo admiten `POST` y su destino: `/insights/monthly-summary` ⇒ `/dashboard`; `/transactions/{id}/delete` ⇒ `/transactions`; cualquier otra ruta sin `GET` ⇒ `/dashboard`. Las rutas de formularios con `GET` propio (`/transactions/create`, `/transactions/{id}/edit`, `/budgets/create`, `/budgets/edit`) vuelven a su `GET`, como indica RN-098. `/account/logout` no llega a este caso (RN-177).
+
+**RN-177** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-71
+
+Patrón EARS: Event-driven
+
+CUANDO llega `POST /account/logout` sin una sesión autenticada vigente, el sistema DEBE redirigir a la página de inicio de sesión sin validar el token antiforgery y sin mostrar un error.
+
+✅ **Ejemplo:** La sesión de `demo1` expiró y pulsa «Cerrar sesión»: llega al inicio de sesión, sin MSG-46 ni MSG-48.
+
+❌ **Contraejemplo:** La respuesta es `400` por el token antiforgery, o el usuario vuelve al inicio de sesión con `returnUrl=/account/logout`.
+
+> Con sesión vigente se valida el token (RN-101) y se aplica RN-097. La ruta es `[AllowAnonymous]` y valida el token de forma explícita solo si hay sesión.
+
+--- Mensajes citados (03 §10) ---
+| ID | Texto | Reglas |
+|---|---|---|
+| MSG-02 | No se pudo iniciar sesión. Verifica tu correo y contraseña, o inténtalo de nuevo en unos minutos. | RN-050 |
+| MSG-10 | La fecha no puede ser posterior a hoy. | RN-057 |
+| MSG-11 | Ingresa el monto. | RN-104, RN-105, RN-106 |
+| MSG-12 | Selecciona una categoría. | RN-105 |
+| MSG-21 | Ya tienes un presupuesto para este mes. Puedes cambiarlo desde «Editar presupuesto». | RN-064 |
+| MSG-22 | Solo puedes crear o editar el presupuesto del mes en curso. | RN-118, RN-167 |
+| MSG-32 | Ingresa tu correo. | RN-149, RN-154 |
+| MSG-34 | Ingresa tu contraseña. | RN-149, RN-154 |
+| MSG-44 | Revisa los datos ingresados. | RN-116, ADR-004 §3.1 (API: `title` de `ValidationProblemDetails`; MVC: título del resumen de errores, `09` CMP-04) |
+| MSG-46 | Tu formulario caducó. Vuelve a la página e inténtalo de nuevo. | RN-170 |
+| MSG-48 | Tu sesión terminó. Inicia sesión para continuar. | RN-171 |
+</contexto>
+<tarea>
+Genera un prototipo visual de esta pantalla como un artifact HTML/CSS/JS 
+interactivo. Debe:
+1. Reflejar fielmente el wireframe textual.
+2. Incluir datos de ejemplo realistas (no lorem ipsum).
+3. Ser responsive (funcionar en móvil y desktop).s
+4. Incluir estados: vacío, con datos, error, loading.
+5. Usar los design tokens definidos.
+</tarea>
+<restricciones>
+    - NO es código de producción: es un prototipo para validar con stakeholders.
+    - Priorizar claridad del flujo sobre pixel-perfection.
+    - Incluir interacciones básicas (clics, navegación simulada, validaciones).
+    - Si una sección depende de datos dinámicos, usar datos ficticios del caso.
+</restricciones>
+]]></prompt>
+  </paso>
+  <salida archivo="prototipos/P-002-iniciar-sesion.html" tipo="artifact HTML/CSS/JS interactivo" insumo_de="Agente Prototype Reviewer"/>
+</ejecucion_bmad>

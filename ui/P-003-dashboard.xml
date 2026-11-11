@@ -1,0 +1,1121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ejecucion_bmad documento="09-ui-spec.md" pantalla="P-003" version="v1.0" fecha="2026-11-11" proyecto="ExpenseFlow AI">
+  <paso numero="1" agente="Prototipo Visual">
+    <prompt><![CDATA[
+<agente>
+Eres un desarrollador frontend senior. Tu trabajo es convertir un 
+wireframe textual en un prototipo visual interactivo.
+</agente>
+<contexto>
+Estoy prototipando la pantalla P-003 — Dashboard de ExpenseFlow AI.
+--- SCREEN SPEC --
+### P-003 — Dashboard
+
+| Campo | Valor |
+|---|---|
+| Propósito | Ver en una pantalla saldos, presupuesto, avisos, gasto por categoría, últimos movimientos y el resumen de IA |
+| Actor | Usuario autenticado |
+| HU | HU-008, HU-009, HU-010A, HU-010B, HU-011 (solo datos propios) |
+| Reglas | RN-013, RN-023 a RN-033, RN-037, RN-066 a RN-081, RN-120 a RN-128, RN-131, RN-132, RN-141, RN-142, RN-162, RN-163, RN-165, RN-166, RN-172 |
+| Layout | CMP-01, «Inicio» activo |
+
+**Datos que muestra** (todos llegan calculados y formateados en el `ViewModel`; la vista no calcula nada, RN-027):
+
+| Bloque | Dato | Ejemplo `demo1` |
+|---|---|---|
+| Saldos | «Saldo del mes» (`<h2>`) | «Saldo del mes: S/ 105.00» |
+| | «Saldo acumulado» (`<h3>`) | «Saldo acumulado: S/ 155.00» |
+| | Leyenda junto a cada saldo | «Saldo calculado según tus registros» |
+| | Texto si el saldo es negativo | «Tus gastos superan tus ingresos registrados» |
+| Presupuesto | Monto | «Presupuesto: S/ 600.00» / «Presupuesto: No configurado» |
+| | Porcentaje | «Porcentaje consumido: 82.50 %» / «Porcentaje consumido: No disponible» |
+| | Restante | «Restante del presupuesto: S/ 105.00» (mínimo S/ 0.00) |
+| | Estado y exceso (solo si excedido) | «Estado: Presupuesto excedido», «Exceso: S/ 50.00» |
+| | Barra | CMP-08 |
+| Avisos | Umbral | CMP-09: «Alcanzaste el 80 % de tu presupuesto mensual» o «Alcanzaste el 100 % de tu presupuesto mensual» |
+| Categorías | Total por categoría > 0, de mayor a menor | Alimentación S/ 270.00, Transporte S/ 120.00, Estudios S/ 105.00 |
+| Movimientos | Hasta 5, con CMP-07 | 5 filas + «Ver todos los movimientos» |
+| IA | Resumen (una sola vez), MSG-23 o MSG-24 | — |
+| Confirmación | MSG-49, MSG-50 o MSG-53 tras guardar (una sola vez, RN-172) | «Gasto guardado.» |
+
+**Acciones:**
+
+| Acción | Elemento | Destino |
+|---|---|---|
+| Registrar gasto | Botón-enlace primario «Nuevo gasto» | P-004 |
+| Registrar ingreso | Botón-enlace secundario «Nuevo ingreso» | P-005 |
+| Crear presupuesto | Enlace «Crear presupuesto» (solo sin presupuesto) | P-009 |
+| Editar presupuesto | Enlace «Editar presupuesto» (solo con presupuesto) | P-010 |
+| Ver lista | Enlace «Ver todos los movimientos» | P-006 |
+| Pedir resumen | Botón «Generar resumen del mes» (`POST /insights/monthly-summary`) | `303` → P-003 |
+
+**Orden de lectura** (es el orden del DOM; no se reordena con CSS para no romper el orden de foco):
+
+0. Confirmación (si llega)
+1. `<h1>` + acciones rápidas
+2. Saldos (`<h2>` saldo del mes antes de `<h3>` saldo acumulado, HU-008)
+3. Presupuesto del mes (aviso, cifras, barra)
+4. Gasto por categoría
+5. Últimos movimientos
+6. Resumen del mes con IA
+
+**Wireframe (360 px), escenario `demo1`:**
+
+```
+┌────────────────────────────────────────┐
+│ CMP-01 (Inicio activo)                  │
+├────────────────────────────────────────┤
+│ <h1> Mi mes: noviembre de 2026         │ [Propuesta]; mes en es-PE desde el ViewModel
+│ ┌──────────────────┐┌─────────────────┐│ fila de 2 botones, 50 % cada uno, 48 px
+│ │ + Nuevo gasto    ││ + Nuevo ingreso ││ primario / outline-primario
+│ └──────────────────┘└─────────────────┘│ el «+» es texto, no icono
+│                                        │
+│ ┌ section aria-labelledby="saldos-h" ─┐│ tarjeta
+│ │ <h2 id="saldos-h">                   ││ «Saldo del mes: » 1.125rem / 600
+│ │   Saldo del mes: S/ 105.00           ││ importe en <span> 1.75rem / 700, tabular-nums
+│ │ Saldo calculado según tus registros  ││ 0.875rem muted
+│ │ ───────────────────────────────────  ││ separador --ef-color-divider
+│ │ <h3> Saldo acumulado: S/ 155.00      ││ importe 1.25rem / 700
+│ │ Saldo calculado según tus registros  ││
+│ └──────────────────────────────────────┘│
+│                                        │
+│ ┌ section aria-labelledby="pres-h" ───┐│ tarjeta
+│ │ <h2 id="pres-h"> Presupuesto del mes ││ 1.125rem / 600 [Propuesta]
+│ │                                      ││
+│ │ ┌ CMP-09 role="status" ───────────┐  ││ fondo --ef-warning-bg, borde izq. 4 px
+│ │ │ ⚠ Alcanzaste el 80 % de tu      │  ││ texto --ef-warning-text, 600
+│ │ │   presupuesto mensual            │  ││
+│ │ └─────────────────────────────────┘  ││
+│ │                                      ││
+│ │ <dl> (dos columnas: término | valor) ││
+│ │  Presupuesto:           S/ 600.00    ││ el <dt> incluye los dos puntos (DEC-83)
+│ │  Porcentaje consumido:  82.50 %      ││
+│ │  Restante del presupuesto: S/ 105.00 ││
+│ │                                      ││
+│ │ [CMP-08 ████████████████░░░░ 82.50 %]││ barra 16 px de alto, relleno ámbar (≥ 80 %)
+│ │                                      ││
+│ │ Editar presupuesto                   ││ enlace, alineado a la izquierda
+│ └──────────────────────────────────────┘│
+│                                        │
+│ ┌ section aria-labelledby="cat-h" ────┐│
+│ │ <h2 id="cat-h"> Gasto por categoría  ││
+│ │ <ul>                                 ││ lista sin viñetas, una fila por categoría
+│ │  Alimentación          S/ 270.00     ││ nombre a la izquierda, monto a la derecha
+│ │  Transporte            S/ 120.00     ││ 48 px por fila, separador entre filas
+│ │  Estudios              S/ 105.00     ││ (sin barras: no son datos del backend)
+│ │ </ul>                                ││
+│ └──────────────────────────────────────┘│
+│                                        │
+│ ┌ section aria-labelledby="mov-h" ────┐│
+│ │ <h2 id="mov-h"> Últimos movimientos  ││
+│ │ <ol> 5 × CMP-07                      ││ ver CMP-07 (sin botones Editar/Eliminar aquí)
+│ │  01/11/2026 · Estudios · Gasto       ││
+│ │                         S/ 105.00    ││
+│ │  …                                   ││
+│ │ </ol>                                ││
+│ │ Ver todos los movimientos            ││ enlace, 48 px de alto
+│ └──────────────────────────────────────┘│
+│                                        │
+│ ┌ section aria-labelledby="ia-h" ─────┐│
+│ │ <h2 id="ia-h"> Resumen del mes con IA││ [Propuesta]
+│ │ ┌──────────────────────────────────┐ ││
+│ │ │      Generar resumen del mes     │ ││ btn-outline-primary, w-100, 48 px
+│ │ └──────────────────────────────────┘ ││
+│ │ <div id="ia-estado" aria-live="polite">  vacío; el JS escribe «Generando resumen…»
+│ └──────────────────────────────────────┘│
+└────────────────────────────────────────┘
+```
+
+**Escritorio (≥ 992 px):** cuadrícula de 12 columnas. Fila 1: `<h1>` (8 col.) y los dos botones (4 col., a la derecha). Fila 2: saldos (5 col.) y presupuesto (7 col.). Fila 3: gasto por categoría (5 col.) y últimos movimientos (7 col.). Fila 4: resumen de IA (12 col., máx. 72 caracteres por línea en el texto). El orden del DOM es el mismo que en móvil.
+
+**Variantes por escenario (estados):**
+
+| Escenario | Saldos | Bloque Presupuesto | Aviso | Categorías | Movimientos |
+|---|---|---|---|---|---|
+| Normal < 80 % | Positivos | Monto, %, restante, barra azul | Ninguno | Lista | Lista |
+| `demo1` 80 %–<100 % | Positivos | Igual, barra ámbar | «Alcanzaste el 80 %…» | Lista | Lista |
+| `demo5` 100.00 % sin exceso | — | «100.00 %», «Restante del presupuesto: S/ 0.03», barra roja llena; **sin** «Presupuesto excedido» | «Alcanzaste el 100 %…» | Lista | Lista |
+| `demo2` excedido | — | «110.00 %», «Restante del presupuesto: S/ 0.00», «Estado: Presupuesto excedido», «Exceso: S/ 50.00», barra roja llena | «Alcanzaste el 100 %…» | Lista | Lista |
+| `demo3` sin presupuesto, saldo negativo | «Saldo del mes: -S/ 150.00» y «Saldo acumulado: -S/ 150.00», cada uno con «Tus gastos superan tus ingresos registrados» | «Presupuesto: No configurado», «Porcentaje consumido: No disponible», «Configura un presupuesto para controlar tus gastos» + enlace «Crear presupuesto». **Sin** barra, restante, exceso ni estado | Ninguno | Lista | Lista |
+| `demo4` sin movimientos | S/ 0.00, sin texto de saldo negativo | Como `demo3` | Ninguno | MSG-42 | MSG-41 (sin enlace «Ver todos…» `[Propuesta]`) |
+| Solo ingresos | Positivos | Según presupuesto | — | MSG-42 | Lista |
+
+**Saldo negativo:** el importe se escribe con signo «-S/ …» (RN-081), en color `--ef-color-danger` **y** con el texto «Tus gastos superan tus ingresos registrados» debajo, en el mismo bloque. El color nunca va solo (HU-008).
+
+**Resumen de IA (estados de la sección 6):**
+
+| Estado | Qué se ve |
+|---|---|
+| IA habilitada, sin resumen | Botón «Generar resumen del mes» habilitado |
+| Generando (con JS) | Botón con `disabled`, texto «Generando resumen…» en el botón **y** en `#ia-estado` (`aria-live="polite"`); spinner decorativo `aria-hidden="true"`. Se envía 1 sola solicitud |
+| Generando (sin JS) | El navegador muestra su indicador de carga; un segundo toque puede reenviar (limitación aceptada DEC-90) |
+| Resultado | Sobre el botón: «Explicación generada automáticamente» (etiqueta 0.875rem, 600) → texto del modelo en `<p class="ef-ai-text">` (`white-space: pre-line`, codificado por Razor, nunca `Html.Raw`) → «No constituye asesoría financiera» (0.875rem, muted). Bloque con borde izquierdo 4 px `--ef-color-accent`. Se muestra **una sola vez** (TempData) |
+| Fallo (MSG-23) | Bloque `alert-warning` con `role="status"` y MSG-23; botón habilitado; el resto del dashboard intacto, incluido el aviso del 80 % |
+| IA deshabilitada (MSG-24) | Botón con `disabled` y `aria-describedby` hacia un texto con MSG-24 bajo el botón, desde la carga |
+
+**Wireframe del resultado de IA:**
+
+```
+│ ┌ section ─────────────────────────────┐│
+│ │ <h2> Resumen del mes con IA          ││
+│ │ ┃ Explicación generada               ││ borde izquierdo acento
+│ │ ┃ automáticamente                    ││
+│ │ ┃                                    ││
+│ │ ┃ Este mes gastaste S/ 495.00 de     ││ texto del modelo, 1rem, interlineado 1.6
+│ │ ┃ tu presupuesto de S/ 600.00…       ││
+│ │ ┃                                    ││
+│ │ ┃ No constituye asesoría financiera  ││ 0.875rem muted
+│ │ ┌──────────────────────────────────┐ ││
+│ │ │      Generar resumen del mes     │ ││
+│ │ └──────────────────────────────────┘ ││
+│ └──────────────────────────────────────┘│
+```
+
+**Literales en el DOM (DEC-83):** cada `<dt>` termina en dos puntos («Presupuesto:», «Porcentaje consumido:», «Restante del presupuesto:», «Estado:», «Exceso:») para que el texto visible coincida con los criterios de HU-007 a HU-009.
+
+**Sin JavaScript:** todas las cifras son idénticas (HU-008). Lo único que cambia es que el botón de IA no se deshabilita al pulsarlo.
+
+**Should (HU-018, no se implementa en el MVP):** dentro de CMP-09 del 80 %, un botón «Explicar mi consumo». No aparece con el aviso del 100 % ni sin presupuesto.
+
+--- Reglas comunes a todas las pantallas (09 §3.0) ---
+### 3.0 Reglas comunes a todas las pantallas
+
+Estas reglas aplican a todas las pantallas y no se repiten en cada ficha.
+
+**Documento y semántica (PRINCIPIO-001, PRINCIPIO-012)**
+
+- `<html lang="es-PE">`, `<meta name="viewport" content="width=device-width, initial-scale=1">` (sin `maximum-scale` ni `user-scalable=no`).
+- `<title>` único: «`<Nombre de la pantalla>` — ExpenseFlow AI».
+- Primer elemento enfocable: enlace «Saltar al contenido principal» (visible al recibir foco) que lleva a `<main id="contenido">`.
+- Landmarks: `<header>`, `<nav aria-label="Principal">` (solo con sesión), `<main id="contenido">`, `<footer>`.
+- Un único `<h1>` por pantalla. Sin saltos de nivel de encabezado.
+- Ningún texto en inglés visible ni en atributos accesibles (`aria-label`, `title`, `alt`, `placeholder`).
+
+**Formularios (PRINCIPIO-012, ADR-006)**
+
+- `<form method="post" novalidate>` con el token antiforgery de Razor.
+- Cada campo usa CMP-03: `<label for>` visible siempre (nunca solo `placeholder`).
+- Error de un campo: texto bajo el campo, con icono SVG decorativo (`aria-hidden="true"`) **y** el texto del mensaje; el campo recibe `aria-invalid="true"` y `aria-describedby` apunta al `id` del error (y al de la ayuda, si hay). El borde rojo nunca es la única señal.
+- Si hay errores de campo, el formulario muestra arriba CMP-04 y el **primer campo con error** lleva el atributo `autofocus` (lo pone Razor, funciona sin JS). CMP-04 no recibe el foco (DEC-78).
+- **Errores que no son de un campo** (MSG-02, MSG-21, MSG-22): se muestran en un bloque propio sobre el formulario, con `role="alert"` y estilo `--ef-danger-bg`, sin CMP-04 y sin `aria-invalid` en los campos (DEC-80). Si además hay errores de campo, se muestran ambos.
+- Todo botón de envío de formulario usa CMP-10 (DEC-74).
+- Tras un error, el servidor vuelve a mostrar lo que el usuario escribió (salvo contraseñas).
+- Los campos de radio se agrupan en `<fieldset>` con `<legend>`; el error del grupo se asocia al `<fieldset>` con `aria-describedby`.
+
+**Mensajes de confirmación (RN-172)**
+
+- Tras guardar o eliminar, la página de destino muestra **una sola vez** la confirmación (MSG-49 a MSG-53), al inicio de `<main>`, en un bloque con `role="status"`, estilo `--ef-success-bg` / `--ef-success-text` y un icono decorativo. Llega por TempData: al recargar, ya no aparece.
+- El bloque no recibe el foco ni se cierra solo; desaparece en la siguiente navegación.
+
+**Mejora progresiva (DP-4)**
+
+- Toda pantalla funciona igual sin JavaScript, salvo: deshabilitar el botón al enviar (RN-131, RN-168), mostrar u ocultar «Descripción» en ingresos y el diálogo de eliminación. Cada uno tiene su comportamiento sin JS documentado en su ficha.
+- `site.js` se carga con `defer` al final del `<body>`.
+
+**Tamaños mínimos (WCAG 2.2, 2.5.8)**
+
+- Toda área interactiva mide al menos 44 × 44 px (el mínimo AA es 24 × 24; se usa 44 por el contexto Android).
+- El foco es siempre visible (token `--ef-focus-ring`) y no queda tapado por la cabecera (2.4.11): la cabecera **no es fija** (`position: static`).
+
+**Montos**
+
+- Columna o bloque de montos con `font-variant-numeric: tabular-nums` y alineado a la derecha en listas.
+- El tipo de movimiento siempre se dice en texto («Gasto» / «Ingreso»), no solo con color.
+
+--- Componentes que usa la pantalla ---
+### CMP-01 — Layout autenticado
+
+**Propósito:** marco común de las pantallas con sesión; da acceso a las secciones y a «Cerrar sesión».
+**HU:** HU-002B.
+
+**Datos:** ninguno financiero. Puede mostrar el correo del usuario `[Propuesta]`; nunca su contraseña.
+
+**Acciones:**
+
+| Acción | Elemento | Destino |
+|---|---|---|
+| Ir al dashboard | Enlace «Inicio» y la marca «ExpenseFlow AI» | `/dashboard` |
+| Ir a la lista | Enlace «Movimientos» | `/transactions` |
+| Ir al presupuesto | Enlace «Presupuesto» | `/budgets/create` si no hay presupuesto del mes; `/budgets/edit` si lo hay (lo decide el servidor) |
+| Cerrar sesión | `<form method="post" action="/account/logout">` con botón «Cerrar sesión» y token antiforgery | P-002 (DEC-63). Con la sesión ya expirada, también P-002, sin error (RN-177) |
+
+**Reglas:** RN-097, RN-140 (`Cache-Control: no-store`, lo aplica el servidor), RN-177.
+
+**Wireframe (360 px):**
+
+```
+┌────────────────────────────────────────┐
+│ [Saltar al contenido principal]  ← solo visible con foco
+├────────────────────────────────────────┤ <header> fondo --ef-color-primary
+│ ExpenseFlow AI            [Cerrar sesión]│ marca: enlace a /dashboard (texto blanco, 1.125rem, 700)
+│                                         │ botón: btn-outline-light, 44 px de alto
+├────────────────────────────────────────┤ <nav aria-label="Principal"> fondo --ef-color-surface
+│  Inicio  │ Movimientos │ Presupuesto   │ 3 enlaces en fila, cada uno 1/3 del ancho, 48 px de alto
+│  ▔▔▔▔▔▔                                │ el activo: aria-current="page", texto 700 y borde inferior 3 px primario
+├────────────────────────────────────────┤
+│ <main id="contenido">                  │ container, padding lateral 16 px
+│   …contenido de la pantalla…           │
+├────────────────────────────────────────┤ <footer> texto --ef-color-text-muted, 0.875rem
+│ Aplicación académica con datos         │
+│ ficticios. Los saldos son calculados   │
+│ según tus registros.                   │ [Propuesta] (PRINCIPIO-006, PRINCIPIO-009)
+└────────────────────────────────────────┘
+```
+
+**Escritorio (≥ 768 px):** cabecera y navegación en una sola franja: marca a la izquierda, los 3 enlaces en el centro, «Cerrar sesión» a la derecha. Contenido en `container` (máx. 1140 px).
+
+**Sin JavaScript:** igual. **No** se usa el componente `collapse` («hamburguesa») de Bootstrap, porque depende de JS; con 3 enlaces cabe en 360 px.
+
+### CMP-07 — Fila de movimiento
+
+**Usado en:** P-003 (sin acciones) y P-006 (con «Editar» y «Eliminar»).
+**HU:** HU-003, HU-004, HU-005, HU-008. **Reglas:** RN-079, RN-080, RN-081.
+
+**Formato del texto (literal de las HU):**
+
+- Gasto: «08/11/2026 · Transporte · Gasto · S/ 3.50»
+- Ingreso: «08/11/2026 · Apoyo familiar · Ingreso · S/ 600.00»
+- Ingreso «Otros» con descripción: «08/11/2026 · Otros: Venta de libros · Ingreso · S/ 80.00»
+
+**Wireframe (360 px):**
+
+```
+<li class="ef-tx">
+┌────────────────────────────────────────┐
+│ 08/11/2026 · Transporte · Gasto        │ 1ª línea: fecha (tabular), categoría u origen, tipo
+│                            S/ 3.50     │ 2ª línea (o misma en ≥ 576 px): monto, 600, derecha
+│ [ Editar ]  [ Eliminar ]               │ solo en P-006: botones pequeños, 44 px de alto
+└────────────────────────────────────────┘
+```
+
+- El DOM contiene el literal completo de la fila: antes del monto hay un separador « · » visualmente oculto (`visually-hidden`), así que el texto es «08/11/2026 · Transporte · Gasto · S/ 3.50» aunque el monto se vea en otra línea (DEC-83).
+- La palabra «Gasto» / «Ingreso» va en una insignia de texto (`badge`) con fondo neutro; el color del monto es el texto normal (no se colorea por tipo, para no depender del color).
+- La descripción «Otros» larga (hasta 100 caracteres) se ajusta en varias líneas (`overflow-wrap: anywhere`); nunca se trunca.
+- En P-006, los botones llevan un nombre accesible completo: `aria-label="Editar gasto del 08/11/2026 de S/ 3.50"` y `aria-label="Eliminar gasto del 08/11/2026 de S/ 3.50"`. El texto visible sigue siendo «Editar» / «Eliminar».
+- Separador inferior 1 px `--ef-color-divider`; altura mínima 56 px.
+
+### CMP-08 — Barra de consumo del presupuesto
+
+**HU:** HU-009. **Reglas:** RN-024, RN-028, RN-029, RN-120, RN-141.
+
+```html
+<div class="progress ef-progress"
+     role="progressbar"
+     aria-label="Porcentaje consumido del presupuesto"
+     aria-valuemin="0" aria-valuemax="100"
+     aria-valuenow="82.50" aria-valuetext="82.50 %">
+  <div class="progress-bar ef-progress--warning" style="width: 82.50%"></div>
+</div>
+```
+
+| Porcentaje (ya redondeado por el backend) | Ancho visual | `aria-valuenow` | `aria-valuetext` | Color de relleno |
+|---|---|---|---|---|
+| < 80.00 | el porcentaje | el porcentaje | «NN.NN %» | `--ef-progress-normal` |
+| 80.00 – 99.99 | el porcentaje | el porcentaje | «NN.NN %» | `--ef-progress-warning` |
+| ≥ 100.00 (`demo2`: 110.00) | 100 % (no se desborda) | `100` | el porcentaje real («110.00 %») | `--ef-progress-danger` |
+
+- El ancho y los valores ARIA los entrega el `ViewModel` ya limitados; la vista no compara umbrales.
+- La barra mide 16 px de alto, con borde 1 px `--ef-color-border` para que el contenedor sea perceptible (contraste ≥ 3:1, WCAG 1.4.11).
+- El porcentaje también se muestra en texto en la lista `<dl>` (el color de la barra no es la única señal).
+
+### CMP-09 — Aviso de umbral
+
+**HU:** HU-009. **Reglas:** RN-028, RN-029, RN-120, RN-121.
+
+| `alert` del backend | Texto | Estilo |
+|---|---|---|
+| `Threshold80` | «Alcanzaste el 80 % de tu presupuesto mensual» | `--ef-warning-bg` / `--ef-warning-text`, borde izq. 4 px |
+| `Threshold100` | «Alcanzaste el 100 % de tu presupuesto mensual» | `--ef-danger-bg` / `--ef-danger-text`, borde izq. 4 px |
+| `null` | — (no se renderiza el contenedor) | — |
+
+- Contenedor con `role="status"`, texto 600, icono SVG triangular `aria-hidden="true"`.
+- Es independiente de la IA: aparece aunque Ollama esté caído (HU-009, HU-010B).
+
+### CMP-10 — Botón de envío con estado «enviando»
+
+- Botón `<button type="submit" data-disable-on-submit data-submitting-text="…">` con texto de reposo (ADR-006, punto 3). `site.js` solo actúa sobre botones con `data-disable-on-submit`.
+- `site.js`: en el evento `submit` del formulario, si no hay otro envío en curso, pone `disabled` y `aria-disabled="true"`, cambia el texto al de envío y escribe el mismo texto en una región `aria-live="polite"` del formulario. Un segundo `submit` se cancela con `preventDefault()`.
+- `pageshow` con `event.persisted` (volver con «Atrás» desde la caché del navegador) restaura el botón.
+- Lo exigen RN-131 y RN-168; en P-001, P-002, P-009 y P-010 lo aplica DEC-74.
+
+| Formulario | Texto en reposo | Texto al enviar |
+|---|---|---|
+| P-001 | «Crear cuenta» | «Creando cuenta…» `[Propuesta]` |
+| P-002 | «Iniciar sesión» | «Iniciando sesión…» `[Propuesta]` |
+| P-004 | «Guardar gasto» | «Guardando…» `[Propuesta]` |
+| P-005 | «Guardar ingreso» | «Guardando…» `[Propuesta]` |
+| P-007 | «Guardar cambios» | «Guardando…» `[Propuesta]` |
+| P-009 | «Guardar presupuesto» | «Guardando…» `[Propuesta]` |
+| P-010 | «Guardar cambios» | «Guardando…» `[Propuesta]` |
+| P-003 IA | «Generar resumen del mes» | «Generando resumen…» (HU-010A) |
+--- DESIGN TOKENS --
+## 4. Design tokens
+
+Los tokens se definen como variables CSS en `wwwroot/css/site.css`, cargado **después** de `bootstrap.min.css`. Los que tienen equivalente en Bootstrap se asignan también a `--bs-*`.
+
+### 4.1 Colores
+
+Todos los contrastes están calculados con la fórmula de WCAG 2.2.
+
+| Token | Valor | Uso | Contraste verificado |
+|---|---|---|---|
+| `--ef-color-primary` | `#0B5C8A` | Botones primarios, enlaces, cabecera, barra normal | Blanco sobre él 7.21:1; sobre `--ef-color-bg` 6.72:1 |
+| `--ef-color-primary-hover` | `#084A6F` | Hover y activo del primario | Blanco sobre él 9.46:1 |
+| `--ef-primary-subtle` | `#E8F2F9` | Fondo de opción seleccionada, aviso informativo | `#0B4F75` sobre él 7.74:1 |
+| `--ef-color-secondary` | `#475467` | Botones secundarios, insignias «Gasto»/«Ingreso» | Blanco sobre él 7.69:1 |
+| `--ef-color-accent` | `#0F6E5C` | Borde del bloque de IA, detalles de marca | Sobre blanco 6.17:1 |
+| `--ef-color-bg` | `#F5F7FA` | Fondo de página | — |
+| `--ef-color-surface` | `#FFFFFF` | Tarjetas, formularios, diálogos | — |
+| `--ef-color-text` | `#1A1F29` | Texto principal | Sobre blanco 16.51:1; sobre fondo 15.38:1 |
+| `--ef-color-text-muted` | `#4B5565` | Ayudas, leyendas, pie | Sobre blanco 7.54:1; sobre fondo 7.02:1 |
+| `--ef-color-border` | `#6B7280` | Bordes de campos, mosaicos y barra (componentes) | Sobre blanco 4.83:1 (≥ 3:1, WCAG 1.4.11) |
+| `--ef-color-divider` | `#E4E8EE` | Separadores decorativos y pista de la barra | Decorativo; no transmite información |
+| `--ef-color-danger` | `#B42318` | Texto de error, saldo negativo | Sobre blanco 6.57:1 |
+| `--ef-danger-bg` / `--ef-danger-text` | `#FEF0EE` / `#912018` | Aviso del 100 %, resumen de errores | 7.80:1 |
+| `--ef-warning-bg` / `--ef-warning-text` | `#FFF4E0` / `#7A3E00` | Aviso del 80 %, MSG-23 | 7.66:1 |
+| `--ef-success-bg` / `--ef-success-text` | `#ECF7EF` / `#1F6E37` | Confirmaciones MSG-49 a MSG-53 (RN-172) | 5.72:1 |
+| `--ef-info-bg` / `--ef-info-text` | `#E8F2F9` / `#0B4F75` | Aviso de datos ficticios, MSG-48 | 7.74:1 |
+| `--ef-progress-normal` | `#0B5C8A` | Barra < 80 % | Sobre la pista 5.86:1 |
+| `--ef-progress-warning` | `#B45309` | Barra 80 %–<100 % | Sobre la pista 4.08:1 (≥ 3:1) |
+| `--ef-progress-danger` | `#B42318` | Barra ≥ 100 % | Sobre la pista 5.35:1 |
+| `--ef-focus-ring` | `0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A` | Indicador de foco (doble anillo: visible sobre fondos claros y sobre la cabecera azul) | Azul sobre fondo 6.72:1 |
+
+**Reglas de uso del color:**
+
+- Sin modo oscuro en el MVP: `color-scheme: light` en `:root`.
+- El rojo, el ámbar y el verde nunca son la única señal: siempre van con texto (y un icono decorativo).
+- Los importes se escriben en `--ef-color-text`, salvo el saldo negativo (`--ef-color-danger` + texto).
+
+### 4.2 Tipografía
+
+| Token | Valor |
+|---|---|
+| `--ef-font-family` | `system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif` (Roboto en Android) |
+| `--ef-font-numeric` | `font-variant-numeric: tabular-nums` en importes, fechas y porcentajes |
+| Tamaño base | `16px` (`1rem`); los campos nunca bajan de 16 px (evita el zoom automático en móviles) |
+| Interlineado | `1.5` en general, `1.6` en el texto de la IA |
+
+| Estilo | Móvil | ≥ 768 px | Peso | Uso |
+|---|---|---|---|---|
+| `h1` | 1.5rem | 1.75rem | 700 | Título de pantalla |
+| `h2` | 1.125rem | 1.25rem | 600 | Título de sección |
+| Importe destacado | 1.75rem | 2rem | 700 | Saldo del mes |
+| Importe secundario | 1.25rem | 1.25rem | 700 | Saldo acumulado |
+| Cuerpo | 1rem | 1rem | 400 | Texto, valores |
+| Etiqueta | 1rem | 1rem | 600 | `<label>`, `<legend>` |
+| Pequeño | 0.875rem | 0.875rem | 400 | Ayudas, leyendas, pie |
+
+El texto debe seguir siendo legible con zoom al 200 % y con espaciado de texto aumentado (WCAG 1.4.4, 1.4.12): sin alturas fijas en contenedores de texto.
+
+### 4.3 Espaciado, formas y tamaños
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--ef-space-1` … `--ef-space-6` | 4, 8, 12, 16, 24, 32 px | Escala de márgenes y padding |
+| Gutter lateral | 16 px | Contenedor en móvil |
+| `--ef-radius` | 0.5rem (8 px) | Tarjetas, campos, botones, mosaicos |
+| `--ef-radius-sm` | 0.25rem | Insignias |
+| Sombra de tarjeta | `0 1px 2px rgba(16, 24, 40, .08)` | Solo tarjetas |
+| Ancho máx. de formularios | 560 px | P-004, P-005, P-007, P-009, P-010 |
+| Ancho máx. de autenticación | 440 px | P-001, P-002 |
+| Contenedor del dashboard | 1140 px | P-003, P-006 |
+
+| Componente | Alto mínimo | Notas |
+|---|---|---|
+| Botón primario de formulario | 56 px | Ancho completo en móvil |
+| Botón normal / enlace de navegación | 48 px | |
+| Botón de fila («Editar», «Eliminar») | 44 px | `min-width: 44px` |
+| Campo de texto / fecha | 48 px (Monto: 56 px) | Padding horizontal 12 px |
+| Mosaico de opción | 56 px | |
+| Casilla de verificación | 24 × 24 px dentro de un área clicable de 44 px | |
+| Barra de progreso | 16 px | |
+| Fila de movimiento | 56 px | |
+
+### 4.4 Puntos de quiebre
+
+Los de Bootstrap 5, diseñando primero para 360 px (RC-1, T4):
+
+| Nombre | Desde | Cambios principales |
+|---|---|---|
+| base | 0 (diseño a 360 px) | Una columna; botones a ancho completo |
+| `sm` | 576 px | Categorías en 3 columnas; filas de movimiento en una línea |
+| `md` | 768 px | Cabecera y navegación en una franja |
+| `lg` | 992 px | Dashboard en dos columnas |
+
+### 4.5 Ejemplo de `site.css` (cabecera de tokens)
+
+```css
+:root {
+  color-scheme: light;
+  --ef-color-primary: #0B5C8A;
+  --ef-color-primary-hover: #084A6F;
+  --ef-primary-subtle: #E8F2F9;
+  --ef-color-secondary: #475467;
+  --ef-color-accent: #0F6E5C;
+  --ef-color-bg: #F5F7FA;
+  --ef-color-surface: #FFFFFF;
+  --ef-color-text: #1A1F29;
+  --ef-color-text-muted: #4B5565;
+  --ef-color-border: #6B7280;
+  --ef-color-divider: #E4E8EE;
+  --ef-color-danger: #B42318;
+  --ef-danger-bg: #FEF0EE;   --ef-danger-text: #912018;
+  --ef-warning-bg: #FFF4E0;  --ef-warning-text: #7A3E00;
+  --ef-success-bg: #ECF7EF;  --ef-success-text: #1F6E37;
+  --ef-info-bg: #E8F2F9;     --ef-info-text: #0B4F75;
+  --ef-progress-normal: #0B5C8A;
+  --ef-progress-warning: #B45309;
+  --ef-progress-danger: #B42318;
+  --ef-focus-ring: 0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A;
+  --ef-radius: .5rem;
+
+  /* Puente con Bootstrap 5 */
+  --bs-primary: var(--ef-color-primary);
+  --bs-primary-rgb: 11, 92, 138;
+  --bs-body-bg: var(--ef-color-bg);
+  --bs-body-color: var(--ef-color-text);
+  --bs-border-color: var(--ef-color-border);
+  --bs-border-radius: var(--ef-radius);
+  --bs-link-color: var(--ef-color-primary);
+  --bs-link-hover-color: var(--ef-color-primary-hover);
+  --bs-body-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+}
+.btn-primary {
+  --bs-btn-bg: var(--ef-color-primary);
+  --bs-btn-border-color: var(--ef-color-primary);
+  --bs-btn-hover-bg: var(--ef-color-primary-hover);
+  --bs-btn-hover-border-color: var(--ef-color-primary-hover);
+  --bs-btn-active-bg: var(--ef-color-primary-hover);
+}
+:focus-visible { outline: none; box-shadow: var(--ef-focus-ring); }
+.ef-amount { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+```
+--- REGLAS DE NEGOCIO RELEVANTES --
+**RN-013** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-001, PRINCIPIO-003 · Decisión del equipo
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE formatear todo importe mediante el formato monetario compartido `MoneyFormat`, que aplica el patrón de RN-081.
+
+✅ **Ejemplo:** Las vistas y la API usan `MoneyFormat.Format(45.00m)`, que devuelve «S/ 45.00».
+
+❌ **Contraejemplo:** Una vista usa `amount.ToString("C")` con la cultura del servidor y muestra «$ 45.00» o «PEN 45.00».
+
+> `MoneyFormat` parte de la cultura `es-PE` (PRINCIPIO-001) y fija explícitamente el símbolo «S/», el punto decimal, la coma de miles y el espacio normal, para que el resultado no dependa de la versión de ICU ni del sistema operativo.
+
+**RN-023** | Categoría: Cálculo | Prioridad: MUST | Fuente: PRINCIPIO-004 · Alcance M4
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE calcular el total de gastos del mes como la suma de los gastos del usuario cuya fecha, en la zona horaria `America/Lima`, pertenece a ese mes.
+
+✅ **Ejemplo:** Gastos de una cuenta de prueba: 2026-10-31 S/ 100.00, 2026-11-01 S/ 200.00, 2026-11-15 S/ 250.00. El total de 2026-11 es S/ 450.00.
+
+❌ **Contraejemplo:** El total de 2026-11 es S/ 550.00 porque incluye el gasto del 2026-10-31.
+
+**RN-024** | Categoría: Cálculo | Prioridad: MUST | Fuente: PRINCIPIO-003, PRINCIPIO-004 · Alcance M4
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario tenga presupuesto para el mes, el sistema DEBE calcular el porcentaje consumido como (total de gastos del mes ÷ presupuesto del mes) × 100.
+
+✅ **Ejemplo:** Presupuesto de 2026-11: S/ 600.00. Gastos de 2026-11: S/ 495.00. Porcentaje consumido: `82.50`.
+
+❌ **Contraejemplo:** El porcentaje se toma del texto del modelo de IA («aproximadamente 80 %»), o se muestra `82.5000001` por un cálculo con `double`.
+
+> El resultado se redondea según RN-025. Sin presupuesto: RN-066 y RN-068 a RN-070. El porcentaje puede superar 100.00 (RN-067).
+
+**RN-025** | Categoría: Cálculo | Prioridad: MUST | Fuente: PRINCIPIO-003
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE redondear a 2 decimales todo valor monetario o porcentual que resulte de un cálculo, con la constante compartida `MoneyRounding.Mode`.
+
+✅ **Ejemplo:** `Math.Round(value, 2, MoneyRounding.Mode)` en `BudgetService`.
+
+❌ **Contraejemplo:** `Math.Round(value, 2)` sin modo explícito, que aplica `ToEven` por defecto, mientras otro servicio usa `AwayFromZero`.
+
+> Decisión DEC-03: `MoneyRounding.Mode = MidpointRounding.AwayFromZero`. Como resultado de cálculo, 12.345 se redondea a 12.35, 12.355 a 12.36 y 12.344 a 12.34. El redondeo se aplica solo a resultados de cálculo, nunca a montos ingresados (RN-055).
+
+**RN-026** | Categoría: Cálculo | Prioridad: MUST | Fuente: PRINCIPIO-004 · Alcance M4
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE calcular el restante del presupuesto como presupuesto del mes − total de gastos del mes.
+
+✅ **Ejemplo:** Presupuesto de 2026-11: S/ 600.00. Gastos: S/ 450.00. Restante del presupuesto: S/ 150.00.
+
+❌ **Contraejemplo:** El restante del presupuesto se calcula restando también los ingresos, o lo calcula el modelo de IA.
+
+> El valor se conserva internamente con su signo. Cuando es negativo, se presenta según RN-071 a RN-073.
+
+**RN-027** | Categoría: Cálculo | Prioridad: MUST | Fuente: PRINCIPIO-004
+
+Patrón EARS: Ubiquitous
+
+El sistema NO DEBE calcular cifras financieras oficiales fuera de la capa de lógica de negocio del backend.
+
+✅ **Ejemplo:** El saldo del mes de S/ 105.00 lo calcula `BalanceCalculator` en el backend; la vista Razor solo lo muestra.
+
+❌ **Contraejemplo:** Un script JavaScript de la vista suma los gastos de la tabla para mostrar el total.
+
+> «Capa de lógica de negocio»: namespaces `ExpenseFlow.Modules.*.Domain` y `ExpenseFlow.Modules.*.Application` (PRINCIPIO-011, la constitución).
+
+**RN-028** | Categoría: Avisos | Prioridad: MUST | Fuente: Alcance M5
+
+Patrón EARS: State-driven
+
+MIENTRAS el porcentaje consumido del mes en curso esté en el rango [80.00, 100.00), el sistema DEBE mostrar el aviso de umbral del 80 %.
+
+✅ **Ejemplo:** Presupuesto S/ 600.00, gastos S/ 495.00, porcentaje `82.50`: el dashboard muestra «Alcanzaste el 80 % de tu presupuesto mensual».
+
+❌ **Contraejemplo:** Con porcentaje `79.99` aparece el aviso del 80 %, o con porcentaje `85.00` no aparece ningún aviso.
+
+> El porcentaje que se compara es el redondeado (RN-120).
+
+**RN-029** | Categoría: Avisos | Prioridad: MUST | Fuente: Alcance M5
+
+Patrón EARS: State-driven
+
+MIENTRAS el porcentaje consumido del mes en curso sea mayor o igual que 100.00, el sistema DEBE mostrar el aviso de umbral del 100 %.
+
+✅ **Ejemplo:** Presupuesto S/ 600.00, gastos S/ 650.00, porcentaje `108.33`: el dashboard muestra el aviso del 100 % (RN-127).
+
+❌ **Contraejemplo:** Con porcentaje `108.33` el dashboard muestra el aviso del 80 %.
+
+**RN-030** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-012 · Alcance M5
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE comunicar cada aviso de umbral mediante un texto visible.
+
+✅ **Ejemplo:** Junto a la barra de progreso aparece el texto «Alcanzaste el 80 % de tu presupuesto mensual».
+
+❌ **Contraejemplo:** La barra de progreso cambia a color amarillo sin ningún texto.
+
+> El aviso se presenta con `role="status"` para que lo anuncien los lectores de pantalla.
+
+**RN-031** | Categoría: Avisos | Prioridad: MUST | Fuente: PRINCIPIO-004 · Alcance M5
+
+Patrón EARS: Ubiquitous
+
+El sistema NO DEBE condicionar la aparición de un aviso de umbral a una respuesta del modelo de IA.
+
+✅ **Ejemplo:** Con el servicio de Ollama detenido y un porcentaje de `82.50`, el aviso del 80 % se muestra.
+
+❌ **Contraejemplo:** El aviso solo aparece después de que Ollama devuelve el resumen del mes.
+
+**RN-032** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-009 · Alcance M5
+
+Patrón EARS: Ubiquitous
+
+El dashboard DEBE mostrar la leyenda «Saldo calculado según tus registros» junto a cada saldo que presenta.
+
+✅ **Ejemplo:** La leyenda aparece bajo el saldo del mes (S/ 105.00) y bajo el saldo acumulado (S/ 155.00).
+
+❌ **Contraejemplo:** La leyenda aparece solo bajo el saldo del mes, o el saldo acumulado se rotula «Saldo disponible en tu cuenta».
+
+**RN-033** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M5
+
+Patrón EARS: Ubiquitous
+
+El dashboard DEBE mostrar el total de gastos de cada categoría del mes en curso.
+
+✅ **Ejemplo:** Para 2026-11 el dashboard muestra Alimentación S/ 270.00, Transporte S/ 120.00, Estudios S/ 105.00 (escenario `demo1`, §11.3).
+
+❌ **Contraejemplo:** El dashboard muestra solo el total general de S/ 495.00, sin desglose por categoría.
+
+> Se muestran solo las categorías con gastos mayores que S/ 0.00, ordenadas de mayor a menor importe. Si dos categorías tienen el mismo importe, van en el orden de la lista de RN-014 (Alimentación, Transporte, Estudios, Entretenimiento, Salud, Otros). Sin gastos en el mes: RN-163.
+
+**RN-037** | Categoría: IA | Prioridad: MUST | Fuente: Alcance M6
+
+Patrón EARS: Ubiquitous
+
+El sistema NO DEBE generar un resumen del mes sin una solicitud explícita del usuario.
+
+✅ **Ejemplo:** El resumen se genera solo cuando el usuario pulsa el botón «Generar resumen del mes».
+
+❌ **Contraejemplo:** Cada carga del dashboard dispara automáticamente una llamada a Ollama.
+
+**RN-066** | Categoría: Cálculo | Prioridad: MUST | Fuente: DEC-07
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario no tenga presupuesto para el mes en curso, el sistema NO DEBE ejecutar el cálculo del porcentaje consumido.
+
+✅ **Ejemplo:** Sin presupuesto para 2026-11 y con gastos por S/ 450.00, `ConsumedPercentage` vale `null`.
+
+❌ **Contraejemplo:** El sistema lanza `DivideByZeroException`, o devuelve `0.00` o `100.00`.
+
+**RN-067** | Categoría: Cálculo | Prioridad: MUST | Fuente: DEC-06 · DEC-07
+
+Patrón EARS: Ubiquitous
+
+El sistema NO DEBE limitar el porcentaje consumido a un máximo de 100.00.
+
+✅ **Ejemplo:** Presupuesto S/ 500.00, gastos S/ 550.00: porcentaje consumido `110.00`, que se muestra como «110.00 %» (RN-124).
+
+❌ **Contraejemplo:** En la misma situación el porcentaje se muestra como `100.00`.
+
+**RN-068** | Categoría: UX | Prioridad: MUST | Fuente: DEC-07
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario no tenga presupuesto para el mes en curso, el dashboard DEBE mostrar «No configurado» como valor del presupuesto.
+
+✅ **Ejemplo:** `demo3` no tiene presupuesto para 2026-11 y el dashboard muestra «Presupuesto: No configurado».
+
+❌ **Contraejemplo:** El dashboard muestra «Presupuesto: S/ 0.00».
+
+**RN-069** | Categoría: UX | Prioridad: MUST | Fuente: DEC-07
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario no tenga presupuesto para el mes en curso, el dashboard DEBE mostrar «No disponible» como valor del porcentaje consumido.
+
+✅ **Ejemplo:** El dashboard de `demo3` muestra «Porcentaje consumido: No disponible».
+
+❌ **Contraejemplo:** El dashboard muestra «0.00 %» o una barra de progreso vacía sin texto.
+
+**RN-070** | Categoría: UX | Prioridad: MUST | Fuente: DEC-07
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario no tenga presupuesto para el mes en curso, el dashboard DEBE mostrar el mensaje «Configura un presupuesto para controlar tus gastos».
+
+✅ **Ejemplo:** El dashboard de `demo3` muestra ese mensaje con un enlace a «Crear presupuesto».
+
+❌ **Contraejemplo:** No aparece ningún mensaje que oriente a configurar el presupuesto.
+
+**RN-071** | Categoría: UX | Prioridad: MUST | Fuente: DEC-06 · Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS el total de gastos del mes supere el presupuesto del mes, el dashboard DEBE mostrar el restante del presupuesto como S/ 0.00.
+
+✅ **Ejemplo:** Presupuesto S/ 500.00, gastos S/ 550.00: «Restante del presupuesto: S/ 0.00».
+
+❌ **Contraejemplo:** En la misma situación se muestra «Restante del presupuesto: -S/ 50.00».
+
+> Si los gastos son iguales al presupuesto (S/ 600.00 y S/ 600.00), el restante ya es S/ 0.00 por RN-026, y no hay exceso.
+>
+> **Motivo:** el glosario evita «disponible» para no confundirlo con un saldo bancario.
+
+**RN-072** | Categoría: UX | Prioridad: MUST | Fuente: DEC-06
+
+Patrón EARS: State-driven
+
+MIENTRAS el total de gastos del mes supere el presupuesto del mes, el dashboard DEBE mostrar el estado «Presupuesto excedido».
+
+✅ **Ejemplo:** Presupuesto S/ 500.00, gastos S/ 550.00: se muestra «Estado: Presupuesto excedido».
+
+❌ **Contraejemplo:** Con S/ 550.00 de gastos no se muestra el estado, o se muestra con gastos de S/ 500.00 (igual al presupuesto, no superior).
+
+**RN-073** | Categoría: UX | Prioridad: MUST | Fuente: DEC-06
+
+Patrón EARS: State-driven
+
+MIENTRAS el total de gastos del mes supere el presupuesto del mes, el dashboard DEBE mostrar como exceso el valor absoluto de (presupuesto del mes − total de gastos del mes).
+
+✅ **Ejemplo:** Presupuesto S/ 500.00, gastos S/ 550.00: «Exceso: S/ 50.00».
+
+❌ **Contraejemplo:** Se muestra «Exceso: -S/ 50.00», o no se muestra el exceso.
+
+**RN-074** | Categoría: Cálculo | Prioridad: MUST | Fuente: DEC-05 · PRINCIPIO-004
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE calcular el saldo del mes como total de ingresos del mes − total de gastos del mes.
+
+✅ **Ejemplo:** 2026-11: ingresos S/ 600.00, gastos S/ 495.00, saldo del mes S/ 105.00.
+
+❌ **Contraejemplo:** El saldo del mes se muestra como S/ 155.00 porque incluye los movimientos de 2026-10.
+
+**RN-075** | Categoría: Cálculo | Prioridad: MUST | Fuente: DEC-05 · PRINCIPIO-004
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE calcular el saldo acumulado como total de ingresos registrados − total de gastos registrados.
+
+✅ **Ejemplo:** 2026-10: ingresos S/ 600.00, gastos S/ 550.00. 2026-11: ingresos S/ 600.00, gastos S/ 495.00. Saldo acumulado: S/ 1,200.00 − S/ 1,045.00 = S/ 155.00.
+
+❌ **Contraejemplo:** El saldo acumulado muestra S/ 105.00 porque solo considera 2026-11.
+
+> Los movimientos eliminados no existen en la base de datos (RN-115) y, por tanto, no participan.
+
+**RN-076** | Categoría: UX | Prioridad: MUST | Fuente: DEC-05
+
+Patrón EARS: Ubiquitous
+
+El dashboard DEBE mostrar el saldo del mes.
+
+✅ **Ejemplo:** El dashboard de `demo1` muestra «Saldo del mes: S/ 105.00».
+
+❌ **Contraejemplo:** El dashboard muestra solo el saldo acumulado.
+
+> Orden: RN-126. Saldo negativo: RN-123.
+
+**RN-077** | Categoría: UX | Prioridad: MUST | Fuente: DEC-05
+
+Patrón EARS: Ubiquitous
+
+El dashboard DEBE mostrar el saldo acumulado.
+
+✅ **Ejemplo:** El dashboard de `demo1` muestra «Saldo acumulado: S/ 155.00».
+
+❌ **Contraejemplo:** El dashboard muestra solo el saldo del mes.
+
+**RN-078** | Categoría: UX | Prioridad: MUST | Fuente: DEC-15
+
+Patrón EARS: Ubiquitous
+
+El dashboard DEBE mostrar los últimos movimientos del usuario autenticado, hasta un máximo de 5 (`DashboardRecentTransactionsLimit = 5`).
+
+✅ **Ejemplo:** `demo1` tiene 12 movimientos y ve 5, más el enlace «Ver todos los movimientos» (RN-117). `demo3` tiene 3 y ve 3.
+
+❌ **Contraejemplo:** `demo1` ve 10 movimientos, o ve un movimiento de `demo2`.
+
+> Sin movimientos: RN-162.
+
+**RN-079** | Categoría: Datos | Prioridad: MUST | Fuente: DEC-15
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE ordenar los movimientos por la clave (fecha del movimiento DESC, fecha de creación DESC, `Id` DESC).
+
+✅ **Ejemplo:** Hay dos movimientos con fecha `2026-11-08`: el `Id` 41, creado a las 10:15, y el `Id` 40, creado a las 09:00. El 41 aparece primero.
+
+❌ **Contraejemplo:** Los movimientos se ordenan por `Id` ascendente.
+
+> Aplica a los últimos movimientos (RN-078) y a la lista de movimientos (RN-117).
+
+**RN-080** | Categoría: UX | Prioridad: MUST | Fuente: DEC-15 · PRINCIPIO-012 · DEC-18
+
+Patrón EARS: Ubiquitous
+
+Cada movimiento de los últimos movimientos y de la lista de movimientos DEBE mostrar estos datos: fecha, categoría u origen, tipo de movimiento en texto, monto.
+
+✅ **Ejemplo:** «08/11/2026 · Transporte · Gasto · S/ 3.50». Para un ingreso con origen «Otros» y descripción: «05/11/2026 · Otros: Venta de libros · Ingreso · S/ 80.00».
+
+❌ **Contraejemplo:** El tipo se indica solo con color (verde o rojo), sin la palabra «Ingreso» o «Gasto»; o se agrega una columna «Descripción» vacía en todas las filas.
+
+> La descripción solo existe para ingresos con origen «Otros» (RN-060) y se muestra unida al origen. El gasto no tiene descripción (RN-016). Formato de fecha: RN-125.
+
+> La vista contiene como texto los separadores « · » de la fila y los dos puntos de los rótulos («Saldo del mes:»), para que las pruebas comparen el literal visible (DEC-83).
+
+**RN-081** | Categoría: UX | Prioridad: MUST | Fuente: DEC-11 · PRINCIPIO-003
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE mostrar todo importe con el patrón «S/ #,##0.00», con un espacio normal (U+0020) entre «S/» y la cifra.
+
+✅ **Ejemplo:** `1250.5m` se muestra como «S/ 1,250.50» y `2500m` como «S/ 2,500.00».
+
+❌ **Contraejemplo:** «S/ 1.250,50», «S/ 2 500,00», «S/ 1250.5», o «S/ 1,250.50» con un espacio de no separación (U+00A0), que ICU inserta en algunos sistemas.
+
+> Implementación: `MoneyFormat` (RN-013). Las pruebas comparan la cadena exacta. Importes negativos: RN-123.
+
+**RN-097** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-48
+
+Patrón EARS: Event-driven
+
+CUANDO el usuario pulsa «Cerrar sesión», el sistema DEBE eliminar la cookie de autenticación del navegador.
+
+✅ **Ejemplo:** Tras cerrar sesión, el navegador ya no tiene la cookie: `GET /dashboard` redirige a la página de inicio de sesión y `GET /api/dashboard` responde `401`.
+
+❌ **Contraejemplo:** Tras cerrar sesión, el navegador conserva la cookie y el usuario puede seguir registrando gastos.
+
+> Después de cerrar sesión se muestra la página de inicio de sesión. Que el botón «Atrás» no muestre datos se garantiza con RN-140.
+>
+> **Limitación aceptada (DEC-48):** la cookie es autocontenida. Una copia capturada antes del cierre sigue siendo válida hasta su expiración (RN-098). Se acepta en el MVP porque solo hay datos ficticios (PRINCIPIO-006).
+
+> Si la sesión ya no es vigente al pulsar «Cerrar sesión», se aplica RN-177.
+
+**RN-120** | Categoría: Avisos | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE evaluar los umbrales de 80 % y 100 % con el porcentaje consumido ya redondeado según RN-024.
+
+✅ **Ejemplo:** Presupuesto S/ 600.00, gastos S/ 599.97. El cociente exacto es 99.995 %, que se redondea a `100.00`. El dashboard muestra «100.00 %», el aviso del 100 %, «Restante del presupuesto: S/ 0.03» y **no** muestra «Presupuesto excedido», porque los gastos no superan el presupuesto.
+
+❌ **Contraejemplo:** El dashboard muestra «100.00 %» junto al aviso del 80 %, porque la comparación usó el valor sin redondear.
+
+> «Presupuesto excedido» se decide comparando importes (RN-072), no porcentajes.
+>
+> **Motivo:** así, el aviso siempre coincide con el porcentaje que ve el usuario.
+
+**RN-121** | Categoría: Avisos | Prioridad: MUST | Fuente: DEC-07 · Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario no tenga presupuesto para el mes en curso, el sistema NO DEBE mostrar avisos de umbral.
+
+✅ **Ejemplo:** `demo3`, sin presupuesto y con gastos por S/ 450.00, no ve ningún aviso de umbral; ve el mensaje de RN-070.
+
+❌ **Contraejemplo:** Aparece el aviso del 100 % porque el sistema trató el presupuesto ausente como S/ 0.00.
+
+**RN-122** | Categoría: UX | Prioridad: MUST | Fuente: DEC-07 · Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario no tenga presupuesto para el mes en curso, el dashboard NO DEBE mostrar el restante del presupuesto, el estado «Presupuesto excedido» ni el exceso.
+
+✅ **Ejemplo:** El dashboard de `demo3` muestra presupuesto «No configurado», porcentaje «No disponible», el mensaje de RN-070, los saldos, el gasto por categoría y los últimos movimientos.
+
+❌ **Contraejemplo:** Muestra «Restante del presupuesto: S/ 0.00» o «Exceso: S/ 450.00».
+
+**RN-123** | Categoría: UX | Prioridad: MUST | Fuente: DEC-26
+
+Patrón EARS: State-driven
+
+MIENTRAS un saldo sea negativo, el dashboard DEBE mostrarlo con el signo «-» delante del símbolo «S/».
+
+✅ **Ejemplo:** Ingresos de 2026-11: S/ 0.00; gastos: S/ 45.00. Se muestra «Saldo del mes: -S/ 45.00».
+
+❌ **Contraejemplo:** Se muestra «S/ -45.00», «(S/ 45.00)», o «S/ 45.00» en rojo sin signo.
+
+> Texto explicativo: RN-142.
+>
+> **Motivo:** es el caso habitual del primer uso: el usuario registra gastos antes de su primer ingreso.
+
+**RN-124** | Categoría: UX | Prioridad: MUST | Fuente: DEC-11 · DEC-25
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE mostrar todo porcentaje con 2 decimales, punto decimal y un espacio antes del símbolo «%».
+
+✅ **Ejemplo:** `82.5` se muestra como «82.50 %» y `110` como «110.00 %».
+
+❌ **Contraejemplo:** «82.5 %», «110 %», «82,50 %» o «82.50%».
+
+> Excepción: los textos fijos de los avisos de umbral («Alcanzaste el 80 % …») usan el número entero del umbral.
+
+**RN-125** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-001 · DEC-35
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE mostrar las fechas en la UI con el formato `dd/MM/yyyy`.
+
+✅ **Ejemplo:** La fecha `2026-11-08` se muestra como «08/11/2026».
+
+❌ **Contraejemplo:** Se muestra «11/08/2026», «8/11/26» o «2026-11-08».
+
+> Los campos de entrada usan `<input type="date">`, que el navegador presenta según su configuración y envía en formato ISO (`yyyy-MM-dd`). La API REST usa ISO 8601.
+
+**RN-126** | Categoría: UX | Prioridad: MUST | Fuente: DEC-05 · DEC-27
+
+Patrón EARS: Ubiquitous
+
+El dashboard DEBE presentar el saldo del mes antes que el saldo acumulado en el orden de lectura.
+
+✅ **Ejemplo:** En el DOM y en pantalla (móvil y escritorio), «Saldo del mes» aparece antes que «Saldo acumulado», con un encabezado de mayor nivel.
+
+❌ **Contraejemplo:** En móvil, el saldo acumulado aparece primero.
+
+> Encabezados: «Saldo del mes» usa `<h2>` y «Saldo acumulado» `<h3>`.
+>
+> **Motivo:** esto concreta «indicador principal» (DEC-05) de forma verificable con Playwright.
+
+**RN-127** | Categoría: Avisos | Prioridad: MUST | Fuente: Alcance M5 · Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS se muestre el aviso de umbral del 100 %, su texto DEBE ser «Alcanzaste el 100 % de tu presupuesto mensual».
+
+✅ **Ejemplo:** Con gastos de S/ 650.00 y presupuesto de S/ 600.00 se ven el aviso «Alcanzaste el 100 % de tu presupuesto mensual» y, por separado, «Estado: Presupuesto excedido» y «Exceso: S/ 50.00».
+
+❌ **Contraejemplo:** El aviso dice «Te quedaste sin dinero», o desaparece cuando se muestra «Presupuesto excedido».
+
+**RN-128** | Categoría: Seguridad | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Ubiquitous
+
+El sistema NO DEBE interpretar el texto generado por el modelo como HTML ni como Markdown.
+
+✅ **Ejemplo:** El modelo devuelve `<script>alert(1)</script>`; la vista lo muestra literalmente como texto, codificado por Razor, y no ejecuta nada.
+
+❌ **Contraejemplo:** La vista usa `@Html.Raw(summary)`, o convierte el Markdown del modelo a HTML.
+
+> Los saltos de línea del texto se conservan con CSS (`white-space: pre-line`).
+
+**RN-131** | Categoría: UX | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS una solicitud de resumen esté en curso, el sistema DEBE mostrar el botón «Generar resumen del mes» deshabilitado con el texto «Generando resumen…».
+
+✅ **Ejemplo:** El usuario pulsa el botón dos veces seguidas; se envía 1 sola solicitud a Ollama.
+
+❌ **Contraejemplo:** Cada pulsación envía una solicitud nueva y el modelo procesa 2 en paralelo.
+
+> El texto «Generando resumen…» se anuncia con `aria-live="polite"`.
+
+> Sin JavaScript el botón no se deshabilita y un segundo envío es posible (limitación aceptada, DEC-90).
+
+**RN-132** | Categoría: UX | Prioridad: MUST | Fuente: DEC-12 · DEC-33
+
+Patrón EARS: State-driven
+
+MIENTRAS las funciones de IA estén deshabilitadas, el dashboard DEBE mostrar el botón «Generar resumen del mes» deshabilitado junto al texto MSG-24.
+
+✅ **Ejemplo:** Con `Ai:BaseUrl` vacío, el botón aparece deshabilitado y debajo se lee «El análisis con inteligencia artificial no está configurado en esta instalación.»
+
+❌ **Contraejemplo:** El botón desaparece sin explicación, o está habilitado y siempre devuelve MSG-23.
+
+> «Deshabilitada» (configuración inválida, RN-086, RN-087) es distinto de «no disponible» (Ollama no responde, RN-038).
+
+**RN-140** | Categoría: Seguridad | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Ubiquitous
+
+El sistema DEBE enviar la cabecera `Cache-Control: no-store` en toda respuesta que requiera sesión autenticada.
+
+✅ **Ejemplo:** La respuesta de `GET /dashboard` incluye `Cache-Control: no-store`; tras cerrar sesión, el botón «Atrás» del navegador vuelve a solicitar la página y se redirige al inicio de sesión.
+
+❌ **Contraejemplo:** Tras cerrar sesión, «Atrás» muestra desde la caché del navegador el dashboard con los saldos.
+
+**RN-141** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-012 · Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS el porcentaje consumido supere 100.00, la barra de progreso del presupuesto DEBE mostrarse llena con `aria-valuenow="100"`, `aria-valuemax="100"` y `aria-valuetext` igual al porcentaje real.
+
+✅ **Ejemplo:** Con 110.00 %, la barra ocupa el 100 % del ancho y el lector de pantalla anuncia «110.00 %».
+
+❌ **Contraejemplo:** La barra tiene `aria-valuenow="110"` con `aria-valuemax="100"` (atributo inválido), o se desborda del contenedor.
+
+> Hasta 100.00, `aria-valuenow` es el porcentaje real redondeado a 2 decimales y `aria-valuetext` repite el formato de RN-124.
+
+**RN-142** | Categoría: UX | Prioridad: MUST | Fuente: DEC-26
+
+Patrón EARS: State-driven
+
+MIENTRAS un saldo sea negativo, el dashboard DEBE mostrar junto a él el texto «Tus gastos superan tus ingresos registrados».
+
+✅ **Ejemplo:** «Saldo del mes: -S/ 45.00 · Tus gastos superan tus ingresos registrados».
+
+❌ **Contraejemplo:** El saldo negativo solo se distingue por el color rojo.
+
+> Si el saldo del mes y el acumulado son ambos negativos, el texto aparece junto a cada uno.
+
+**RN-162** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M5 · Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario no tenga movimientos, el sistema DEBE mostrar MSG-41 en lugar de los últimos movimientos del dashboard y en lugar de la lista de movimientos.
+
+✅ **Ejemplo:** `demo4` ve «Aún no tienes movimientos registrados.» en el dashboard y en la página 1 de la lista.
+
+❌ **Contraejemplo:** La sección aparece vacía sin texto, o la lista muestra MSG-31 («No hay más movimientos»).
+
+**RN-163** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M5 · Decisión del equipo
+
+Patrón EARS: State-driven
+
+MIENTRAS el usuario no tenga gastos en el mes en curso, el dashboard DEBE mostrar MSG-42 en lugar del gasto por categoría.
+
+✅ **Ejemplo:** `demo4`, y también un usuario que solo registró ingresos este mes, ven «Aún no tienes gastos registrados este mes.».
+
+❌ **Contraejemplo:** La sección aparece vacía o lista las 6 categorías con S/ 0.00.
+
+**RN-165** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M6 · DEC-54
+
+Patrón EARS: Event-driven
+
+CUANDO el sistema termina de procesar una solicitud de resumen enviada desde el dashboard, el sistema DEBE redirigir al dashboard y mostrar el resultado una sola vez.
+
+✅ **Ejemplo:** El usuario pulsa «Generar resumen del mes»: `POST /insights/monthly-summary` responde `303` hacia `/dashboard`, que muestra el resumen. Al recargar la página no se llama a Ollama y el resumen ya no aparece. Si la solicitud falló, se muestra MSG-23 de la misma forma.
+
+❌ **Contraejemplo:** Recargar la página genera otro resumen, o el resumen se guarda en la base de datos y se muestra en cada visita.
+
+> El resultado viaja en TempData (proveedor de cookie, cifrado con Data Protection) y no se guarda en la base de datos. Aplica a las vistas MVC; la API devuelve el resumen directamente (`200`, ADR-004).
+
+**RN-166** | Categoría: IA | Prioridad: MUST | Fuente: PRINCIPIO-004 · DEC-55
+
+Patrón EARS: Unwanted
+
+SI el texto generado por el modelo contiene alguna cifra no válida según ADR-003, sección 3, ENTONCES el sistema DEBE tratar la solicitud como fallida.
+
+✅ **Ejemplo:** El JSON tiene `remainingBudget: 105.00` y el modelo escribe «Te quedan unos S/ 100»: el usuario ve MSG-23 y el log registra `type=InvalidFigure` (RN-133).
+
+❌ **Contraejemplo:** El texto con «S/ 100» se muestra al usuario.
+
+> Se usa el mismo verificador que las evaluaciones de ADR-003 (`FigureVerifier`, en `Insights.Domain`). No se reintenta (RN-083).
+
+**RN-168** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M3 · DEC-57
+
+Patrón EARS: State-driven
+
+MIENTRAS se envía el formulario «Nuevo gasto», «Nuevo ingreso» o de edición de un movimiento, el sistema DEBE mostrar su botón de envío deshabilitado.
+
+✅ **Ejemplo:** Con la respuesta del servidor retrasada, el usuario pulsa «Guardar gasto» dos veces seguidas: el botón queda deshabilitado tras la primera pulsación y se crea 1 solo gasto.
+
+❌ **Contraejemplo:** Cada pulsación envía el formulario y se crean dos gastos iguales.
+
+> Se implementa como mejora progresiva con JavaScript (ADR-006). Si la respuesta vuelve con errores de validación, la página se recarga con el botón habilitado. Sin JavaScript, o si se pierde la respuesta y el usuario vuelve a enviar, el doble envío sigue siendo posible: limitación aceptada (DEC-57). En el resumen de IA se aplica RN-131.
+
+> Los formularios de registro, inicio de sesión y presupuesto también deshabilitan su botón mientras se envían, con el mismo mecanismo (DEC-74).
+
+**RN-172** | Categoría: UX | Prioridad: MUST | Fuente: Alcance M2, M3, M4 · DEC-69
+
+Patrón EARS: Event-driven
+
+CUANDO el sistema guarda o elimina un movimiento, o guarda un presupuesto, desde un formulario MVC, el sistema DEBE mostrar una sola vez en la página de destino el mensaje de confirmación correspondiente en un bloque con `role="status"`.
+
+✅ **Ejemplo:** Un usuario de prueba guarda un gasto de S/ 3.50: `/dashboard` muestra «Gasto guardado.»; al recargar la página, el mensaje ya no aparece.
+
+❌ **Contraejemplo:** No aparece ninguna confirmación, o la confirmación reaparece en cada recarga.
+
+> Mensajes: gasto nuevo MSG-49, ingreso nuevo MSG-50, edición de un movimiento MSG-51, eliminación MSG-52, presupuesto creado o editado MSG-53. Viajan en TempData (Post/Redirect/Get). La API no muestra confirmaciones: responde con su código HTTP.
+
+**RN-177** | Categoría: Seguridad | Prioridad: MUST | Fuente: Alcance M1 · DEC-71
+
+Patrón EARS: Event-driven
+
+CUANDO llega `POST /account/logout` sin una sesión autenticada vigente, el sistema DEBE redirigir a la página de inicio de sesión sin validar el token antiforgery y sin mostrar un error.
+
+✅ **Ejemplo:** La sesión de `demo1` expiró y pulsa «Cerrar sesión»: llega al inicio de sesión, sin MSG-46 ni MSG-48.
+
+❌ **Contraejemplo:** La respuesta es `400` por el token antiforgery, o el usuario vuelve al inicio de sesión con `returnUrl=/account/logout`.
+
+> Con sesión vigente se valida el token (RN-101) y se aplica RN-097. La ruta es `[AllowAnonymous]` y valida el token de forma explícita solo si hay sesión.
+
+--- Mensajes citados (03 §10) ---
+| ID | Texto | Reglas |
+|---|---|---|
+| MSG-23 | El análisis con inteligencia artificial no está disponible en este momento. Inténtalo nuevamente. | RN-038, RN-082, RN-166 |
+| MSG-24 | El análisis con inteligencia artificial no está configurado en esta instalación. | RN-132 |
+| MSG-31 | No hay más movimientos. | RN-117 |
+| MSG-41 | Aún no tienes movimientos registrados. | RN-162 |
+| MSG-42 | Aún no tienes gastos registrados este mes. | RN-163 |
+| MSG-46 | Tu formulario caducó. Vuelve a la página e inténtalo de nuevo. | RN-170 |
+| MSG-48 | Tu sesión terminó. Inicia sesión para continuar. | RN-171 |
+| MSG-49 | Gasto guardado. | RN-172 |
+| MSG-50 | Ingreso guardado. | RN-172 |
+| MSG-51 | Cambios guardados. | RN-172 |
+| MSG-52 | Movimiento eliminado. | RN-172, RN-178 |
+| MSG-53 | Presupuesto guardado. | RN-172 |
+</contexto>
+<tarea>
+Genera un prototipo visual de esta pantalla como un artifact HTML/CSS/JS 
+interactivo. Debe:
+1. Reflejar fielmente el wireframe textual.
+2. Incluir datos de ejemplo realistas (no lorem ipsum).
+3. Ser responsive (funcionar en móvil y desktop).s
+4. Incluir estados: vacío, con datos, error, loading.
+5. Usar los design tokens definidos.
+</tarea>
+<restricciones>
+    - NO es código de producción: es un prototipo para validar con stakeholders.
+    - Priorizar claridad del flujo sobre pixel-perfection.
+    - Incluir interacciones básicas (clics, navegación simulada, validaciones).
+    - Si una sección depende de datos dinámicos, usar datos ficticios del caso.
+</restricciones>
+]]></prompt>
+  </paso>
+  <salida archivo="prototipos/P-003-dashboard.html" tipo="artifact HTML/CSS/JS interactivo" insumo_de="Agente Prototype Reviewer"/>
+</ejecucion_bmad>

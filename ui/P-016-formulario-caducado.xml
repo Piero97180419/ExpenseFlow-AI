@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ejecucion_bmad documento="09-ui-spec.md" pantalla="P-016" version="v1.0" fecha="2026-11-11" proyecto="ExpenseFlow AI">
+  <paso numero="1" agente="Prototipo Visual">
+    <prompt><![CDATA[
+<agente>
+Eres un desarrollador frontend senior. Tu trabajo es convertir un 
+wireframe textual en un prototipo visual interactivo.
+</agente>
+<contexto>
+Estoy prototipando la pantalla P-016 — Formulario caducado de ExpenseFlow AI.
+--- SCREEN SPEC --
+### P-016 — Formulario caducado
+
+| Campo | Valor |
+|---|---|
+| Propósito | Responder en español a un formulario MVC enviado con un token antiforgery no válido, sin modificar datos |
+| Actor | Cualquiera |
+| HU | HU-011 (y HU-001, HU-002A cuando el formulario se abrió antes de iniciar sesión en otra pestaña) |
+| Reglas | RN-101, RN-170 |
+| Layout | CMP-02 |
+
+```
+┌────────────────────────────────────────┐
+│ <h1> Formulario caducado               │ [Propuesta]
+│ MSG-46                                 │ «Tu formulario caducó. Vuelve a la página e inténtalo de nuevo.»
+│ Código de error: 400                   │
+│ [ Volver al inicio ]                   │ enlace a /dashboard (sin sesión, lleva a P-002)
+└────────────────────────────────────────┘
+```
+
+Sin traza ni texto en inglés. `POST /account/logout` sin sesión no llega a esta página (RN-177).
+
+--- Reglas comunes a todas las pantallas (09 §3.0) ---
+### 3.0 Reglas comunes a todas las pantallas
+
+Estas reglas aplican a todas las pantallas y no se repiten en cada ficha.
+
+**Documento y semántica (PRINCIPIO-001, PRINCIPIO-012)**
+
+- `<html lang="es-PE">`, `<meta name="viewport" content="width=device-width, initial-scale=1">` (sin `maximum-scale` ni `user-scalable=no`).
+- `<title>` único: «`<Nombre de la pantalla>` — ExpenseFlow AI».
+- Primer elemento enfocable: enlace «Saltar al contenido principal» (visible al recibir foco) que lleva a `<main id="contenido">`.
+- Landmarks: `<header>`, `<nav aria-label="Principal">` (solo con sesión), `<main id="contenido">`, `<footer>`.
+- Un único `<h1>` por pantalla. Sin saltos de nivel de encabezado.
+- Ningún texto en inglés visible ni en atributos accesibles (`aria-label`, `title`, `alt`, `placeholder`).
+
+**Formularios (PRINCIPIO-012, ADR-006)**
+
+- `<form method="post" novalidate>` con el token antiforgery de Razor.
+- Cada campo usa CMP-03: `<label for>` visible siempre (nunca solo `placeholder`).
+- Error de un campo: texto bajo el campo, con icono SVG decorativo (`aria-hidden="true"`) **y** el texto del mensaje; el campo recibe `aria-invalid="true"` y `aria-describedby` apunta al `id` del error (y al de la ayuda, si hay). El borde rojo nunca es la única señal.
+- Si hay errores de campo, el formulario muestra arriba CMP-04 y el **primer campo con error** lleva el atributo `autofocus` (lo pone Razor, funciona sin JS). CMP-04 no recibe el foco (DEC-78).
+- **Errores que no son de un campo** (MSG-02, MSG-21, MSG-22): se muestran en un bloque propio sobre el formulario, con `role="alert"` y estilo `--ef-danger-bg`, sin CMP-04 y sin `aria-invalid` en los campos (DEC-80). Si además hay errores de campo, se muestran ambos.
+- Todo botón de envío de formulario usa CMP-10 (DEC-74).
+- Tras un error, el servidor vuelve a mostrar lo que el usuario escribió (salvo contraseñas).
+- Los campos de radio se agrupan en `<fieldset>` con `<legend>`; el error del grupo se asocia al `<fieldset>` con `aria-describedby`.
+
+**Mensajes de confirmación (RN-172)**
+
+- Tras guardar o eliminar, la página de destino muestra **una sola vez** la confirmación (MSG-49 a MSG-53), al inicio de `<main>`, en un bloque con `role="status"`, estilo `--ef-success-bg` / `--ef-success-text` y un icono decorativo. Llega por TempData: al recargar, ya no aparece.
+- El bloque no recibe el foco ni se cierra solo; desaparece en la siguiente navegación.
+
+**Mejora progresiva (DP-4)**
+
+- Toda pantalla funciona igual sin JavaScript, salvo: deshabilitar el botón al enviar (RN-131, RN-168), mostrar u ocultar «Descripción» en ingresos y el diálogo de eliminación. Cada uno tiene su comportamiento sin JS documentado en su ficha.
+- `site.js` se carga con `defer` al final del `<body>`.
+
+**Tamaños mínimos (WCAG 2.2, 2.5.8)**
+
+- Toda área interactiva mide al menos 44 × 44 px (el mínimo AA es 24 × 24; se usa 44 por el contexto Android).
+- El foco es siempre visible (token `--ef-focus-ring`) y no queda tapado por la cabecera (2.4.11): la cabecera **no es fija** (`position: static`).
+
+**Montos**
+
+- Columna o bloque de montos con `font-variant-numeric: tabular-nums` y alineado a la derecha en listas.
+- El tipo de movimiento siempre se dice en texto («Gasto» / «Ingreso»), no solo con color.
+
+--- Componentes que usa la pantalla ---
+### CMP-02 — Layout público
+
+**Propósito:** marco de registro, inicio de sesión y páginas de error.
+**HU:** HU-001, HU-002A.
+
+```
+┌────────────────────────────────────────┐
+│ [Saltar al contenido principal]        │
+├────────────────────────────────────────┤ <header> fondo --ef-color-primary
+│ ExpenseFlow AI                          │ texto, no enlace si no hay sesión
+├────────────────────────────────────────┤
+│ <main>  tarjeta centrada, máx. 440 px   │
+├────────────────────────────────────────┤
+│ <footer> igual que CMP-01              │
+└────────────────────────────────────────┘
+```
+
+Sin `<nav>`. El fondo de la página es `--ef-color-bg` y el formulario va en una tarjeta `--ef-color-surface`.
+--- DESIGN TOKENS --
+## 4. Design tokens
+
+Los tokens se definen como variables CSS en `wwwroot/css/site.css`, cargado **después** de `bootstrap.min.css`. Los que tienen equivalente en Bootstrap se asignan también a `--bs-*`.
+
+### 4.1 Colores
+
+Todos los contrastes están calculados con la fórmula de WCAG 2.2.
+
+| Token | Valor | Uso | Contraste verificado |
+|---|---|---|---|
+| `--ef-color-primary` | `#0B5C8A` | Botones primarios, enlaces, cabecera, barra normal | Blanco sobre él 7.21:1; sobre `--ef-color-bg` 6.72:1 |
+| `--ef-color-primary-hover` | `#084A6F` | Hover y activo del primario | Blanco sobre él 9.46:1 |
+| `--ef-primary-subtle` | `#E8F2F9` | Fondo de opción seleccionada, aviso informativo | `#0B4F75` sobre él 7.74:1 |
+| `--ef-color-secondary` | `#475467` | Botones secundarios, insignias «Gasto»/«Ingreso» | Blanco sobre él 7.69:1 |
+| `--ef-color-accent` | `#0F6E5C` | Borde del bloque de IA, detalles de marca | Sobre blanco 6.17:1 |
+| `--ef-color-bg` | `#F5F7FA` | Fondo de página | — |
+| `--ef-color-surface` | `#FFFFFF` | Tarjetas, formularios, diálogos | — |
+| `--ef-color-text` | `#1A1F29` | Texto principal | Sobre blanco 16.51:1; sobre fondo 15.38:1 |
+| `--ef-color-text-muted` | `#4B5565` | Ayudas, leyendas, pie | Sobre blanco 7.54:1; sobre fondo 7.02:1 |
+| `--ef-color-border` | `#6B7280` | Bordes de campos, mosaicos y barra (componentes) | Sobre blanco 4.83:1 (≥ 3:1, WCAG 1.4.11) |
+| `--ef-color-divider` | `#E4E8EE` | Separadores decorativos y pista de la barra | Decorativo; no transmite información |
+| `--ef-color-danger` | `#B42318` | Texto de error, saldo negativo | Sobre blanco 6.57:1 |
+| `--ef-danger-bg` / `--ef-danger-text` | `#FEF0EE` / `#912018` | Aviso del 100 %, resumen de errores | 7.80:1 |
+| `--ef-warning-bg` / `--ef-warning-text` | `#FFF4E0` / `#7A3E00` | Aviso del 80 %, MSG-23 | 7.66:1 |
+| `--ef-success-bg` / `--ef-success-text` | `#ECF7EF` / `#1F6E37` | Confirmaciones MSG-49 a MSG-53 (RN-172) | 5.72:1 |
+| `--ef-info-bg` / `--ef-info-text` | `#E8F2F9` / `#0B4F75` | Aviso de datos ficticios, MSG-48 | 7.74:1 |
+| `--ef-progress-normal` | `#0B5C8A` | Barra < 80 % | Sobre la pista 5.86:1 |
+| `--ef-progress-warning` | `#B45309` | Barra 80 %–<100 % | Sobre la pista 4.08:1 (≥ 3:1) |
+| `--ef-progress-danger` | `#B42318` | Barra ≥ 100 % | Sobre la pista 5.35:1 |
+| `--ef-focus-ring` | `0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A` | Indicador de foco (doble anillo: visible sobre fondos claros y sobre la cabecera azul) | Azul sobre fondo 6.72:1 |
+
+**Reglas de uso del color:**
+
+- Sin modo oscuro en el MVP: `color-scheme: light` en `:root`.
+- El rojo, el ámbar y el verde nunca son la única señal: siempre van con texto (y un icono decorativo).
+- Los importes se escriben en `--ef-color-text`, salvo el saldo negativo (`--ef-color-danger` + texto).
+
+### 4.2 Tipografía
+
+| Token | Valor |
+|---|---|
+| `--ef-font-family` | `system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif` (Roboto en Android) |
+| `--ef-font-numeric` | `font-variant-numeric: tabular-nums` en importes, fechas y porcentajes |
+| Tamaño base | `16px` (`1rem`); los campos nunca bajan de 16 px (evita el zoom automático en móviles) |
+| Interlineado | `1.5` en general, `1.6` en el texto de la IA |
+
+| Estilo | Móvil | ≥ 768 px | Peso | Uso |
+|---|---|---|---|---|
+| `h1` | 1.5rem | 1.75rem | 700 | Título de pantalla |
+| `h2` | 1.125rem | 1.25rem | 600 | Título de sección |
+| Importe destacado | 1.75rem | 2rem | 700 | Saldo del mes |
+| Importe secundario | 1.25rem | 1.25rem | 700 | Saldo acumulado |
+| Cuerpo | 1rem | 1rem | 400 | Texto, valores |
+| Etiqueta | 1rem | 1rem | 600 | `<label>`, `<legend>` |
+| Pequeño | 0.875rem | 0.875rem | 400 | Ayudas, leyendas, pie |
+
+El texto debe seguir siendo legible con zoom al 200 % y con espaciado de texto aumentado (WCAG 1.4.4, 1.4.12): sin alturas fijas en contenedores de texto.
+
+### 4.3 Espaciado, formas y tamaños
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--ef-space-1` … `--ef-space-6` | 4, 8, 12, 16, 24, 32 px | Escala de márgenes y padding |
+| Gutter lateral | 16 px | Contenedor en móvil |
+| `--ef-radius` | 0.5rem (8 px) | Tarjetas, campos, botones, mosaicos |
+| `--ef-radius-sm` | 0.25rem | Insignias |
+| Sombra de tarjeta | `0 1px 2px rgba(16, 24, 40, .08)` | Solo tarjetas |
+| Ancho máx. de formularios | 560 px | P-004, P-005, P-007, P-009, P-010 |
+| Ancho máx. de autenticación | 440 px | P-001, P-002 |
+| Contenedor del dashboard | 1140 px | P-003, P-006 |
+
+| Componente | Alto mínimo | Notas |
+|---|---|---|
+| Botón primario de formulario | 56 px | Ancho completo en móvil |
+| Botón normal / enlace de navegación | 48 px | |
+| Botón de fila («Editar», «Eliminar») | 44 px | `min-width: 44px` |
+| Campo de texto / fecha | 48 px (Monto: 56 px) | Padding horizontal 12 px |
+| Mosaico de opción | 56 px | |
+| Casilla de verificación | 24 × 24 px dentro de un área clicable de 44 px | |
+| Barra de progreso | 16 px | |
+| Fila de movimiento | 56 px | |
+
+### 4.4 Puntos de quiebre
+
+Los de Bootstrap 5, diseñando primero para 360 px (RC-1, T4):
+
+| Nombre | Desde | Cambios principales |
+|---|---|---|
+| base | 0 (diseño a 360 px) | Una columna; botones a ancho completo |
+| `sm` | 576 px | Categorías en 3 columnas; filas de movimiento en una línea |
+| `md` | 768 px | Cabecera y navegación en una franja |
+| `lg` | 992 px | Dashboard en dos columnas |
+
+### 4.5 Ejemplo de `site.css` (cabecera de tokens)
+
+```css
+:root {
+  color-scheme: light;
+  --ef-color-primary: #0B5C8A;
+  --ef-color-primary-hover: #084A6F;
+  --ef-primary-subtle: #E8F2F9;
+  --ef-color-secondary: #475467;
+  --ef-color-accent: #0F6E5C;
+  --ef-color-bg: #F5F7FA;
+  --ef-color-surface: #FFFFFF;
+  --ef-color-text: #1A1F29;
+  --ef-color-text-muted: #4B5565;
+  --ef-color-border: #6B7280;
+  --ef-color-divider: #E4E8EE;
+  --ef-color-danger: #B42318;
+  --ef-danger-bg: #FEF0EE;   --ef-danger-text: #912018;
+  --ef-warning-bg: #FFF4E0;  --ef-warning-text: #7A3E00;
+  --ef-success-bg: #ECF7EF;  --ef-success-text: #1F6E37;
+  --ef-info-bg: #E8F2F9;     --ef-info-text: #0B4F75;
+  --ef-progress-normal: #0B5C8A;
+  --ef-progress-warning: #B45309;
+  --ef-progress-danger: #B42318;
+  --ef-focus-ring: 0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A;
+  --ef-radius: .5rem;
+
+  /* Puente con Bootstrap 5 */
+  --bs-primary: var(--ef-color-primary);
+  --bs-primary-rgb: 11, 92, 138;
+  --bs-body-bg: var(--ef-color-bg);
+  --bs-body-color: var(--ef-color-text);
+  --bs-border-color: var(--ef-color-border);
+  --bs-border-radius: var(--ef-radius);
+  --bs-link-color: var(--ef-color-primary);
+  --bs-link-hover-color: var(--ef-color-primary-hover);
+  --bs-body-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+}
+.btn-primary {
+  --bs-btn-bg: var(--ef-color-primary);
+  --bs-btn-border-color: var(--ef-color-primary);
+  --bs-btn-hover-bg: var(--ef-color-primary-hover);
+  --bs-btn-hover-border-color: var(--ef-color-primary-hover);
+  --bs-btn-active-bg: var(--ef-color-primary-hover);
+}
+:focus-visible { outline: none; box-shadow: var(--ef-focus-ring); }
+.ef-amount { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+```
+--- REGLAS DE NEGOCIO RELEVANTES --
+**RN-101** | Categoría: Seguridad | Prioridad: MUST | Fuente: Decisión del equipo
+
+Patrón EARS: Unwanted
+
+SI una solicitud `POST`, `PUT` o `DELETE` llega sin un token antiforgery válido, ENTONCES el sistema DEBE rechazarla con `400 Bad Request` sin modificar datos.
+
+✅ **Ejemplo:** Un formulario de otro sitio envía `POST /transactions/create` con la cookie de `demo1` pero sin token: la respuesta es `400` y no se crea el gasto.
+
+❌ **Contraejemplo:** El gasto se crea porque la cookie de sesión es válida.
+
+> Aplica a los formularios MVC y a la API REST, que se autentica con la misma cookie de Identity (RN-102). En la API, el token se envía en la cabecera `X-CSRF-TOKEN` y se obtiene con `GET /api/antiforgery/token` (ADR-004). Swagger UI solo se publica en `Development` (ADR-004), donde se usa el mismo endpoint para obtener el token.
+>
+> Si una solicitud no tiene sesión ni token, prevalece el `401` de RN-102: la autenticación se evalúa antes que el token. El token está ligado a la sesión: el cliente lo pide **después** de iniciar sesión, y uno obtenido antes deja de ser válido. `GET /api/antiforgery/token` no exige sesión (DEC-60), para que ese caso sea verificable. En la API, el orden completo de evaluación está en ADR-004, sección 3.1 (DEC-58).
+
+> En las vistas MVC, el rechazo se presenta con la página de RN-170. Excepción: `POST /account/logout` sin sesión vigente (RN-177).
+
+**RN-170** | Categoría: UX | Prioridad: MUST | Fuente: PRINCIPIO-001 · DEC-71
+
+Patrón EARS: Unwanted
+
+SI una solicitud `POST` a las vistas MVC llega con un token antiforgery no válido, ENTONCES el sistema DEBE responder `400` con una página en español que muestre MSG-46 y el enlace «Volver al inicio», sin modificar datos.
+
+✅ **Ejemplo:** Un visitante abre «Crear cuenta», inicia sesión en otra pestaña y luego envía el registro: ve «Tu formulario caducó. Vuelve a la página e inténtalo de nuevo.» y no se crea la cuenta.
+
+❌ **Contraejemplo:** La respuesta `400` llega sin contenido, con un texto en inglés, o con la traza del error.
+
+> La página usa el layout público, no consulta la base de datos y no requiere sesión. «Volver al inicio» lleva a `/dashboard` (o al inicio de sesión si no hay sesión). En la API, el `400` de antiforgery sigue usando el `ProblemDetails` estándar (ADR-004 §3.1).
+
+--- Mensajes citados (03 §10) ---
+| ID | Texto | Reglas |
+|---|---|---|
+| MSG-46 | Tu formulario caducó. Vuelve a la página e inténtalo de nuevo. | RN-170 |
+</contexto>
+<tarea>
+Genera un prototipo visual de esta pantalla como un artifact HTML/CSS/JS 
+interactivo. Debe:
+1. Reflejar fielmente el wireframe textual.
+2. Incluir datos de ejemplo realistas (no lorem ipsum).
+3. Ser responsive (funcionar en móvil y desktop).s
+4. Incluir estados: vacío, con datos, error, loading.
+5. Usar los design tokens definidos.
+</tarea>
+<restricciones>
+    - NO es código de producción: es un prototipo para validar con stakeholders.
+    - Priorizar claridad del flujo sobre pixel-perfection.
+    - Incluir interacciones básicas (clics, navegación simulada, validaciones).
+    - Si una sección depende de datos dinámicos, usar datos ficticios del caso.
+</restricciones>
+]]></prompt>
+  </paso>
+  <salida archivo="prototipos/P-016-formulario-caducado.html" tipo="artifact HTML/CSS/JS interactivo" insumo_de="Agente Prototype Reviewer"/>
+</ejecucion_bmad>

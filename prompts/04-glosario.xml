@@ -1,0 +1,773 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ejecucion_bmad documento="04-glosario.md" version="v1.0" fecha="2026-11-10" proyecto="ExpenseFlow AI">
+  <paso numero="1" agente="Agente Business Analyst">
+    <prompt><![CDATA[
+<rol>
+Eres un Business Analyst Senior especializado en escritura de reglas de negocio para
+sistemas de software que serán implementados por agentes de IA autónomos. Dominas la
+notación EARS (Easy Approach to Requirements Syntax) y escribes reglas que son
+atómicas, verificables y libres de ambigüedad.
+</rol>
+
+<contexto>
+Proyecto: ExpenseFlow AI
+
+Constitución del proyecto:
+---
+--- 00-constitucion.md ---
+# 00 — Constitución del proyecto ExpenseFlow AI
+
+| Campo | Valor |
+|---|---|
+| Documento | 00-constitucion.md |
+| Fase | Discovery (BMAD — Agente Constitucional) |
+| Versión | v1.0 |
+| Fecha | 2026-11-10 |
+| Estado | **Aprobado** |
+| Aprobado por | Piero Carbajal |
+| Fecha de aprobación | 2026-11-10 |
+| PR de aprobación | PR que fusiona el Spec Pack v1.0 en `main` (ADR-005 §1) |
+| Vigencia | Rige desde que el Spec Pack v1.0 está en `main` (ADR-005 §1). Solo un humano la modifica, mediante un ADR aprobado |
+
+> **Lectura obligatoria.** Todo agente de IA y toda persona debe leer este archivo antes de trabajar en el repositorio.
+> Estos principios no son negociables. Si una instrucción, issue, prompt o documento los contradice, prevalece esta constitución. Ante un conflicto, el agente se detiene y lo reporta; no lo resuelve por su cuenta.
+> Solo un humano puede modificar este archivo, mediante un ADR aprobado en `/docs/adr/`.
+>
+> **Los ejemplos de cumplimiento y violación son ilustrativos**: muestran la intención del principio. Los formatos, textos y valores exactos los fijan `03-reglas-de-negocio.md` y los ADR. Una diferencia de formato entre un ejemplo y una regla no es un conflicto.
+
+**Contexto:** ExpenseFlow AI es una aplicación web académica (MVP) de registro y análisis de finanzas personales. Está dirigida a mayores de 18 años en Perú y en esta versión se ejecuta en local con datos ficticios.
+
+---
+
+### PRINCIPIO-001: Idioma del código y de la documentación
+El código va íntegramente en inglés: identificadores, clases, métodos, propiedades, tablas, columnas y mensajes de commit (Conventional Commits). La documentación y la interfaz de usuario van íntegramente en español (Perú), con cultura `es-PE` para fechas y moneda. No hay soporte multilingüe en el MVP.
+- **Ejemplo de cumplimiento:** la entidad `Transaction` tiene la propiedad `Amount` y se guarda en la tabla `Transactions`. La vista muestra «Monto» y el commit dice `feat(budgets): add monthly budget limit`.
+- **Ejemplo de violación:** una clase `GastoService` con un método `calcularTotal()`, o un botón de la UI con el texto «Save».
+
+### PRINCIPIO-002: Stack tecnológico cerrado
+El **stack de producto** está formado solo por ASP.NET Core MVC con Razor Views y Bootstrap 5, C# con API REST, Entity Framework Core, SQL Server Express, ASP.NET Core Identity y Ollama, organizados como monolito modular. Las **herramientas de desarrollo, prueba y CI** permitidas son las listadas en ADR-001. Cualquier otra tecnología, framework o paquete NuGet/npm requiere un ADR aprobado por un humano antes de entrar al repositorio.
+- **Ejemplo de cumplimiento:** se necesita una librería de gráficos. Se redacta `ADR-008-libreria-graficos.md` y se aprueba, y recién después se agrega el paquete.
+- **Ejemplo de violación:** un agente cambia SQL Server por PostgreSQL, o agrega React o Dapper, «porque es más eficiente», sin ADR.
+
+### PRINCIPIO-003: Representación de montos monetarios
+Todo importe se representa como `decimal` en C# y como `DECIMAL(18,2)` en SQL Server. La única moneda es el sol peruano (PEN), mostrado como `S/` con cultura `es-PE`. Se prohíben `float` y `double` para almacenar, transportar o calcular importes, y no hay multimoneda ni conversión de divisas. El redondeo usa siempre un modo `MidpointRounding` explícito y definido en una sola constante compartida.
+- **Ejemplo de cumplimiento:** `public decimal Amount { get; set; }` con `[Column(TypeName = "decimal(18,2)")]`, y el porcentaje de consumo se calcula con `Math.Round(value, 2, MoneyRounding.Mode)`.
+- **Ejemplo de violación:** `double total = gastos.Sum(g => (double)g.Amount);`, una columna `FLOAT`, o un campo `Currency` con «USD».
+
+### PRINCIPIO-004: Los cálculos financieros son deterministas y los hace el backend
+Ingresos, gastos, balances, presupuestos y porcentajes de consumo se calculan solo con reglas deterministas en la capa de lógica de negocio del backend. La IA nunca calcula cifras que se muestren como resultado oficial, y nunca crea, modifica ni elimina movimientos o presupuestos.
+- **Ejemplo de cumplimiento:** `BudgetService` calcula que se ha consumido el 82.50 % del presupuesto. El modelo recibe esa cifra ya calculada y solo redacta el resumen en lenguaje natural.
+- **Ejemplo de violación:** se le pide al LLM «suma estos gastos y dime el balance» y su respuesta se muestra como saldo. O se expone a la IA una herramienta o endpoint que ejecuta `DELETE` o `UPDATE` sobre `Transactions`.
+
+### PRINCIPIO-005: IA local y minimización de datos
+Toda inferencia se hace con Ollama ejecutado localmente, en uno de los hosts de la lista cerrada de ADR-002 (`localhost`, `127.0.0.1` o `::1`). Se prohíbe enviar datos de usuarios a cualquier proveedor externo de IA (OpenAI, Anthropic, Google, etc.). El prompt contiene solo datos agregados o minimizados, como totales por categoría y periodo, y nunca nombre, apellidos, correo ni credenciales.
+- **Ejemplo de cumplimiento:** los datos del resumen mensual son `{ "month": "2026-10", "totalsByCategory": { "Alimentación": 450.00, "Transporte": 120.00 } }` y la URL base del cliente es configurable pero validada contra la lista de hosts de ADR-002.
+- **Ejemplo de violación:** se configura `OPENAI_API_KEY` para usarlo como modelo de respaldo, o se envía al modelo `"Usuario: Ana Pérez (ana@correo.com)"` junto con su historial completo de movimientos.
+
+### PRINCIPIO-006: Solo datos ficticios en el MVP
+Esta versión opera exclusivamente con datos ficticios, en desarrollo, pruebas, demostraciones y seeds. Antes de procesar cualquier dato personal real hace falta un ADR aprobado que documente cuatro cosas: la evaluación de riesgos (incluido el cifrado en reposo), las obligaciones bajo la Ley N.° 29733 y su reglamento (inscripción del banco de datos ante la ANPD, aviso de privacidad y consentimiento), la política de retención y el borrado de cuentas en un máximo de 30 días.
+- **Ejemplo de cumplimiento:** el seed crea usuarios como `demo1@expenseflow.test` con movimientos generados por un script incluido en el repositorio.
+- **Ejemplo de violación:** importar el Excel real de gastos de un compañero para «probar con datos reales», o abrir el registro a usuarios reales sin el ADR mencionado.
+
+### PRINCIPIO-007: Aislamiento y uso exclusivo de los datos de cada usuario
+Cada usuario solo puede leer y modificar sus propios movimientos, presupuestos y reportes. Toda consulta sobre datos financieros filtra por el `UserId` del usuario autenticado, obtenido del contexto de autenticación y nunca de un parámetro enviado por el cliente. Los datos financieros no se usan para publicidad, venta a terceros ni entrenamiento de modelos.
+- **Ejemplo de cumplimiento:** `GET /api/transactions/{id}` devuelve `404` si el movimiento pertenece a otro usuario, y una prueba de integración lo verifica con dos usuarios distintos.
+- **Ejemplo de violación:** `GET /api/transactions?userId=15` devuelve los datos del usuario 15 a cualquier sesión válida, o se exportan los gastos de los usuarios para hacer fine-tuning de un modelo.
+
+### PRINCIPIO-008: Controles de seguridad obligatorios
+1. **Transporte:** todo el tráfico va por HTTPS en **todos los entornos**, con TLS 1.2 como mínimo (TLS 1.3 cuando esté disponible). `UseHttpsRedirection()` se aplica siempre; `UseHsts()` se aplica en todos los entornos salvo `Development`.
+2. **Contraseñas:** se usa exclusivamente el hasher de ASP.NET Core Identity con su configuración por defecto (PBKDF2-HMAC-SHA512). Se prohíbe cualquier implementación criptográfica propia.
+3. **Bloqueo de cuenta:** el lockout de Identity está habilitado para nuevos usuarios.
+4. **Secretos:** ningún secreto, cadena de conexión con credenciales, certificado privado ni archivo `.env` se versiona, y los secretos no se registran en logs. Las contraseñas de las cuentas demo ficticias del seed no se consideran secretos (ADR-005, sección 4).
+- **Ejemplo de cumplimiento:** las credenciales de la base de datos se cargan con `dotnet user-secrets` y `.env` está en `.gitignore`. Tras varios intentos fallidos, la cuenta queda bloqueada temporalmente.
+- **Ejemplo de violación:** `appsettings.json` versionado con `Password=Admin123`, un método `HashPassword` propio con SHA-256, o un `_logger.LogInformation("Login: {Email} {Password}")`.
+
+### PRINCIPIO-009: Alcance funcional cerrado
+ExpenseFlow AI solo registra, organiza y analiza movimientos ingresados manualmente. No realiza pagos, transferencias, depósitos, retiros ni inversiones. No se conecta a bancos ni billeteras (BCP, Yape, Plin u otros) y no lee estados de cuenta. El registro exige marcar una declaración de mayoría de edad (18 años o más), y la UI indica que los saldos son calculados y no bancarios.
+- **Ejemplo de cumplimiento:** el formulario de registro no se puede enviar sin marcar la casilla «Declaro ser mayor de 18 años», y el dashboard muestra «Saldo calculado según tus registros».
+- **Ejemplo de violación:** agregar un botón «Pagar con Yape», un importador de PDF de estados de cuenta del BCP, o permitir registrarse sin la declaración de edad.
+
+### PRINCIPIO-010: Acciones prohibidas para agentes de IA
+Ningún agente de IA puede, bajo ninguna circunstancia:
+- hacer push o merge a `main`;
+- desplegar;
+- acceder a datos financieros reales;
+- leer, modificar, mostrar o registrar secretos, credenciales o archivos `.env`;
+- agregar dependencias que no figuren en ADR-001 o en un ADR aprobado. Un agente **sí puede** proponer, en un PR revisable, agregar o actualizar una dependencia que ya figure en esas listas (ADR-005 §7);
+- modificar o eliminar migraciones ya aplicadas (se considera aplicada toda migración incluida en un commit de `main`);
+- generar o proponer migraciones que eliminen tablas, columnas o datos (ADR-005, sección 3);
+- desactivar, omitir (`[Fact(Skip=...)]`) o debilitar pruebas, analizadores o checks de CI;
+- ejecutar operaciones destructivas sobre bases de datos o infraestructura (`DROP`, `TRUNCATE`, `dotnet ef database drop`, borrado de volúmenes);
+- modificar esta constitución.
+
+Todo cambio de un agente llega como rama y Pull Request revisable en Git. Si una tarea exige alguna de estas acciones, el agente se detiene y lo solicita a un humano.
+- **Ejemplo de cumplimiento:** el agente necesita una nueva columna, así que crea una migración nueva `AddCategoryColorToCategories` en una rama `feat/...` y abre un PR.
+- **Ejemplo de violación:** el agente edita la migración `20261101_InitialCreate.cs`, que ya está en `main`, agrega `Skip` a un test que falla para que el CI pase, o abre `.env` para «diagnosticar» la conexión.
+
+### PRINCIPIO-011: Calidad verificada y CI bloqueante
+Cada PR a `main` debe pasar GitHub Actions con estas condiciones:
+- compilación sin errores;
+- `dotnet format --verify-no-changes`;
+- analizadores .NET según `.editorconfig`;
+- pruebas unitarias (xUnit) y de integración (xUnit + `WebApplicationFactory`) en verde;
+- pruebas E2E con Playwright de los flujos principales en verde (ADR-001 §3);
+- cobertura de líneas de al menos 80 % en la capa de lógica de negocio, entendida como los namespaces `ExpenseFlow.Modules.*.Domain` y `ExpenseFlow.Modules.*.Application` (módulos de ADR-004);
+- 100 % de las reglas de prioridad MUST y categoría «Cálculo» de `03-reglas-de-negocio.md` cubiertas por al menos una prueba que las identifique con `[Trait("Rule", "RN-NNN")]`, incluidos sus ejemplos y contraejemplos; el CI lo verifica (ADR-001 §3). Las reglas SHOULD de Cálculo entran en esta condición cuando se implementan;
+- `dotnet list package --vulnerable` sin vulnerabilidades críticas o altas.
+
+Los flujos principales (definidos en `02-alcance.md`, sección 3.3) tienen pruebas E2E con Playwright, el aislamiento entre usuarios tiene pruebas de autorización, y la IA se prueba con respuestas simuladas en el CI más el conjunto de evaluaciones con Ollama real de ADR-003, ejecutado localmente antes del PR. Ninguna prueba usa datos reales. Los cambios en cálculos financieros, seguridad, autenticación, esquema de BD, integración con IA o dependencias requieren además una revisión humana registrada en el PR con la checklist de `/docs/checklist-revision.md` completa.
+- **Ejemplo de cumplimiento:** un PR que modifica `BalanceCalculator` incluye pruebas para presupuesto ausente, montos en el límite y redondeo, el CI está en verde y la checklist está marcada antes del merge.
+- **Ejemplo de violación:** hacer merge con la cobertura de negocio en 72 %, o cambiar la fórmula del porcentaje de consumo sin pruebas nuevas ni checklist de revisión.
+
+### PRINCIPIO-012: Accesibilidad y documentación verificables
+La interfaz cumple WCAG 2.2 nivel AA en sus flujos principales, con diseño responsive mobile-first: es operable por teclado, todo campo tiene `<label>` asociado, el contraste es de al menos 4.5:1 en texto normal y los errores se explican en texto, no solo con color. La documentación vive en Markdown dentro de `/docs`, versionada en Git, e incluye:
+- `README.md` (índice del Spec Pack), Product Brief, PRD y especificaciones SDD con criterios de aceptación;
+- un ADR por cada decisión arquitectónica;
+- OpenAPI/Swagger para todos los endpoints REST;
+- diagramas Mermaid;
+- comentarios XML de C# en interfaces públicas, servicios principales y métodos con reglas de negocio no evidentes;
+- un `README.md` por módulo con su responsabilidad, dependencias y reglas.
+- **Ejemplo de cumplimiento:** el formulario «Nuevo gasto» se completa solo con teclado, sin errores AA en axe (integrado en Playwright), y el endpoint `POST /api/transactions` aparece en Swagger con sus códigos de respuesta.
+- **Ejemplo de violación:** un campo de monto sin etiqueta y con borde rojo como única señal de error, o un módulo `Budgets` nuevo sin README ni entrada en Swagger.
+
+---
+
+Project Brief:
+---
+--- 01-project-brief.md ---
+# Project Brief — ExpenseFlow AI
+
+| Campo | Valor |
+|---|---|
+| Documento | 01-project-brief.md |
+| Fase | Discovery (BMAD — Agente Analyst) |
+| Contexto | Proyecto académico — Diploma en AI-First Software Architecture |
+| País de operación | Perú (foco inicial: Lima Metropolitana) |
+| Versión | v1.0 |
+| Fecha | 2026-11-10 |
+| Estado | **Aprobado** |
+| Aprobado por | Piero Carbajal |
+| Fecha de aprobación | 2026-11-10 |
+| PR de aprobación | PR que fusiona el Spec Pack v1.0 en `main` (ADR-005 §1) |
+| Nota | Las **[Hipótesis]** siguen pendientes de validación con usuarios (`05-preguntas-abiertas.md`) |
+
+> **Convención de este documento**
+> - **[Decisión]**: definido por el equipo; no requiere validación para avanzar.
+> - **[Hipótesis]**: supuesto razonable sin evidencia todavía; debe validarse.
+> - **[Pendiente]**: información que falta confirmar.
+>
+> **Formato de importes:** este documento usa el formato de la UI definido en `03-reglas-de-negocio.md` (RN-081): punto decimal y coma de miles (`S/ 2,500.00`).
+>
+> **Lenguaje:** este documento describe el problema con palabras del usuario, como «dinero disponible» o «cuánto le queda». En la UI y en las especificaciones se usan los términos del glosario (`04-glosario.md`): «Saldo del mes», «Saldo acumulado» y «Restante del presupuesto». «Disponible» no se usa como rótulo en la UI.
+
+---
+
+## 1. Problema y oportunidad
+
+### 1.1 Problema
+
+Los estudiantes universitarios realizan **gastos pequeños y frecuentes** (alimentación, transporte, materiales de estudio, entretenimiento) pagados en efectivo, Yape o Plin, **sin llevar un registro consolidado**. Al terminar la semana o el mes, no saben cuánto gastaron, en qué, ni cuánto les queda disponible hasta la siguiente entrega de dinero.
+
+El problema de fondo no es la falta de herramientas, sino el **abandono del registro**: los métodos actuales exigen disciplina y tiempo, y la persona deja de usarlos tras pocos días.
+
+### 1.2 Cómo lo resuelven hoy y dónde falla **[Hipótesis]**
+
+| Alternativa actual | Limitación percibida |
+|---|---|
+| Apps bancarias (BCP, Interbank, BBVA, etc.) | Solo muestran movimientos de su propia cuenta; no consolidan efectivo ni otros medios de pago. |
+| Historial de Yape / Plin | Muestra pagos de una sola billetera; no hay presupuesto ni categorías personales. |
+| Excel / Google Sheets | Requiere organización y actualización constante; se abandona. |
+| Notas del celular | Sin cálculos, sin categorías, sin visión de conjunto. |
+| Memoria | Imprecisa; los gastos pequeños se olvidan. |
+| Apps de finanzas genéricas (Monefy, Wallet, Spendee) | No están pensadas para el contexto del estudiante peruano. Su uso real por el segmento no está verificado. |
+
+### 1.3 Consecuencias para el usuario **[Hipótesis]**
+
+- Pérdida de control sobre el dinero disponible y dificultad para llegar a la siguiente entrega.
+- Gastos no planificados ("gastos hormiga") que reducen la capacidad de ahorro.
+- Retraso de metas concretas: laptop, materiales universitarios, pago de estudios.
+- Preocupación al no saber si el dinero alcanzará para necesidades importantes.
+
+*Ejemplo ilustrativo (no es un promedio comprobado):* S/ 5.00 diarios en gastos no planificados equivalen a unos S/ 150.00 en 30 días.
+
+### 1.4 Oportunidad
+
+Existe un espacio para una herramienta que **consolide todos los medios de pago** (incluido el efectivo), sea **rápida de usar** y aporte **valor desde el primer día**, en el momento en que el estudiante recibe su dinero y necesita distribuirlo.
+
+### 1.5 Evidencia disponible
+
+**[Pendiente]** No se han realizado encuestas ni entrevistas. El problema se sustenta en situaciones cotidianas plausibles. La validación exploratoria está planificada (sección 6.3; seguimiento en `05-preguntas-abiertas.md`, PQ-01 a PQ-03).
+
+---
+
+## 2. Usuarios y segmentos objetivo
+
+### 2.1 Segmento prioritario (MVP) **[Decisión]**
+
+**Estudiantes universitarios de Lima Metropolitana, mayores de 18 años, con presupuesto personal limitado.**
+
+### 2.2 Persona principal **[Hipótesis]**
+
+| Atributo | Descripción |
+|---|---|
+| Edad | 18 a 25 años (mayor de edad) |
+| Ubicación | Lima Metropolitana |
+| Ocupación | Estudiante universitario |
+| Fuente de ingresos | Dinero semanal o mensual de familiares; en algunos casos, ingresos adicionales por trabajos de medio tiempo, ocasionales o prácticas preprofesionales |
+| Medios de pago | Efectivo, Yape, Plin |
+| Dispositivo | Teléfono Android de gama media |
+| Gastos frecuentes | Alimentación, transporte, materiales de estudio, entretenimiento |
+| Comportamiento | No registra todos sus movimientos; a fin de mes no sabe en qué gastó ni cuánto pudo ahorrar |
+| Expectativa | Herramienta sencilla, gratuita y accesible desde el celular |
+
+### 2.3 Segmentos secundarios (no prioritarios en el MVP) **[Decisión]**
+
+| Segmento | Diferencia principal | Tratamiento |
+|---|---|---|
+| Jóvenes profesionales | Ingreso fijo en planilla; mayor capacidad de ahorro | Pueden usar el sistema; no guían las decisiones del MVP |
+| Trabajadores independientes | Ingresos irregulares (recibos por honorarios) | Pueden usar el sistema; no guían las decisiones del MVP |
+
+### 2.4 Necesidades diferenciales del segmento prioritario
+
+- Registrar **ingresos regulares u ocasionales** sin requerir empleo formal ni cuenta bancaria.
+- Distribuir un monto limitado entre categorías esenciales (transporte, alimentación, estudios).
+- Saber **cuánto queda** hasta la próxima entrega de dinero.
+
+---
+
+## 3. Propuesta de valor
+
+### 3.1 Declaración **[Decisión]**
+
+> **"ExpenseFlow AI te ayuda a saber en qué gastas tu dinero, cuánto te queda disponible y cómo administrarlo mejor, sin complicarte con hojas de cálculo."**
+
+> Nota: esta declaración es un mensaje de producto (ver «Lenguaje» en la cabecera).
+
+### 3.2 Resultados que espera el usuario
+
+| Resultado esperado | Dolor que atiende |
+|---|---|
+| Saber en qué categorías gasta más | Desconocimiento de en qué se fue el dinero |
+| Conocer cuánto dinero le queda | Incertidumbre sobre si alcanzará hasta la próxima entrega |
+| Saber a tiempo cuándo se acerca a su límite de gasto | Descubrir el problema cuando ya es tarde |
+| Recibir explicaciones comprensibles sobre su situación | Dificultad para interpretar sus propios números |
+| Registrar movimientos con mínimo esfuerzo | Abandono del registro manual |
+
+> Estos son **resultados**, no funcionalidades. Su traducción a funcionalidades corresponde a la fase de Product Manager (PRD).
+
+### 3.3 Momento detonante **[Hipótesis]**
+
+- **Principal (prioritario para el MVP):** el día en que el estudiante **recibe su dinero** semanal o mensual y necesita distribuirlo para que le alcance.
+- **Secundario:** cuando descubre que gasta más de lo previsto o quiere ahorrar para una compra concreta (por ejemplo, una laptop).
+
+**Implicancia:** el producto debe aportar valor **desde el primer uso**, sin depender de meses de historial.
+
+### 3.4 Rol de la inteligencia artificial **[Decisión]**
+
+- La IA cumple un **rol complementario**: interpreta la situación financiera del usuario y la explica en lenguaje sencillo.
+- Los **cálculos de montos, saldos y presupuestos** son responsabilidad del sistema mediante **reglas determinísticas**, no de la IA.
+- *Ejemplo:* con un presupuesto de S/ 600.00 y S/ 450.00 gastados a mitad de mes, el sistema calcula el restante y el porcentaje consumido, y la IA explica en lenguaje sencillo el riesgo de exceder el presupuesto.
+- Se reconoce que la inclusión de IA también responde a los **objetivos académicos** del diplomado. **No se presenta como una necesidad comprobada del usuario.**
+
+### 3.5 Diferenciación frente a alternativas **[Hipótesis]**
+
+- Enfoque específico en el estudiante universitario peruano y sus medios de pago (incluido el efectivo).
+- Consolidación de todos los movimientos en un solo lugar.
+- Menor esfuerzo y menor configuración que una hoja de cálculo.
+- Explicaciones comprensibles en lugar de solo números.
+
+**Advertencia:** una persona que abandonó Excel también podría abandonar ExpenseFlow AI. No se asume mayor retención que las alternativas sin pruebas con usuarios.
+
+---
+
+## 4. Modelo de negocio preliminar
+
+### 4.1 MVP académico **[Decisión]**
+
+- **Producto gratuito, sin monetización.**
+- No incluye suscripciones, publicidad, afiliaciones comerciales ni procesamiento de pagos.
+- El objetivo principal del MVP es **demostrar la aplicación de los conocimientos del diplomado**.
+
+### 4.2 Compromiso con los datos **[Decisión]**
+
+- Los datos financieros de los usuarios **no se usarán para publicidad**.
+- **No se venderá** información personal a terceros.
+
+### 4.3 Alternativa comercial futura **[Hipótesis]**
+
+| Elemento | Descripción |
+|---|---|
+| Modelo | Freemium |
+| Gratuito | Funciones principales: registro, presupuestos y reportes |
+| De pago | Análisis financiero avanzado |
+| Precio exploratorio | S/ 5.00 mensuales (no validado) |
+| Condición | El acceso gratuito a las herramientas básicas no debe verse comprometido |
+
+**[Pendiente]** Validar si el segmento tiene disposición de pago, considerando su presupuesto limitado.
+
+### 4.4 Alternativas descartadas para el MVP
+
+- Publicidad y afiliación a productos financieros: incompatibles con el compromiso de datos (4.2).
+- Alianzas B2B2C (universidades, bancos, fintechs): no evaluadas; podrían explorarse en el futuro.
+
+---
+
+## 5. Métricas de éxito (KPIs medibles)
+
+Las métricas se organizan en tres niveles. **Solo los niveles A y B se reportan como resultados del proyecto.**
+
+### 5.A Métricas de usabilidad del MVP académico (medibles en 6 semanas)
+
+| ID | KPI | Meta | Método de medición |
+|---|---|---|---|
+| U1 | Participantes en prueba de usabilidad | ≥ 5 estudiantes universitarios, mayores de 18 años | Registro de sesiones (Participante 1…N) |
+| U2 | Tiempo para registrar un gasto | ≥ 4 de 5 participantes (≥ 80 %) en ≤ 15 segundos | Cronometraje en el **tercer gasto registrado**, tras una tarea de práctica guiada |
+| U3 | Configuración autónoma de presupuesto | ≥ 80 % de participantes configura un presupuesto mensual **sin asistencia** | Observación durante la sesión |
+| U4 | Comprensibilidad de los resúmenes explicativos de IA | ≥ 4 de 5 participantes califican con 4 o 5 (escala 1–5) | Cuestionario post-tarea |
+
+> **Limitación de U4:** las pruebas usan **datos ficticios**. Por tanto, U4 mide si los resúmenes son **comprensibles y plausibles**, no si son **útiles para la vida financiera real** del participante. **No debe interpretarse como validación de la propuesta de valor.**
+
+### 5.B Criterios de aceptación técnicos (verificables en 6 semanas)
+
+| ID | Criterio | Meta | Método |
+|---|---|---|---|
+| T1 | Exactitud de cálculos financieros (saldos, totales, presupuesto restante) | 100 % de casos de prueba definidos pasan | Pruebas automatizadas (xUnit) |
+| T2 | Aislamiento de datos entre usuarios | 0 accesos exitosos a datos de otro usuario en los casos de prueba | Pruebas automatizadas (xUnit / Playwright) |
+| T3 | Flujos principales completos (lista única en `02-alcance.md`, sección 3.3) | 100 % de flujos definidos completados de extremo a extremo | Pruebas E2E (Playwright) |
+| T4 | Uso desde celular | ≥ 1 prueba funcional exitosa de los flujos principales desde un Android físico | Prueba manual en red local, entorno `Demo` |
+
+### 5.C Métricas futuras del producto (no se reportan como resultados del proyecto)
+
+| ID | KPI | Definición |
+|---|---|---|
+| F1 | Frecuencia de registro | % de usuarios activos que registran movimientos ≥ 3 días por semana |
+| F2 | Retención a 4 semanas | % de usuarios que siguen registrando movimientos en la semana 4 tras su alta |
+| F3 | Presupuesto actualizado | % de usuarios que mantienen un presupuesto vigente en el periodo actual |
+| F4 | Control percibido | % de usuarios que declaran que la app les ayuda a controlar mejor sus gastos (encuesta) |
+| F5 | Disposición de pago | % de usuarios dispuestos a pagar por funciones avanzadas (hipótesis freemium) |
+
+**[Pendiente]** Las metas numéricas de F1 a F5 se definirán cuando exista una implementación con usuarios reales.
+
+---
+
+## 6. Riesgos identificados y supuestos
+
+### 6.1 Riesgos
+
+| ID | Riesgo | Probabilidad | Impacto | Mitigación prevista |
+|---|---|---|---|---|
+| R1 | **Abandono del registro**: el estudiante deja de registrar tras los primeros días, como con Excel | **Alta** (riesgo más probable) | Alto (producto) | Minimizar esfuerzo de registro; valor desde los primeros movimientos; evitar configuración innecesaria |
+| R2 | **Alcance excede las 6 semanas** para un equipo de 1 persona (IA, pruebas, 15 temas del diplomado) | Media-Alta | **Muy alto** (riesgo de mayor impacto académico) | Priorizar solo lo esencial; datos ficticios; pruebas desde las primeras semanas |
+| R3 | **Calidad de la IA**: el modelo local genera resúmenes incorrectos, genéricos o poco útiles | Media | Medio | Cálculos financieros independientes de la IA; la IA solo interpreta; evaluaciones con Ollama real (PRINCIPIO-011) |
+| R4 | **Validación**: no se consiguen 5 participantes a tiempo | Media | Medio | Planificar la validación en las semanas 1–2 |
+| R5 | **Confianza**: los usuarios no quieren registrar datos financieros en una app nueva | Media | Alto (producto) | Compromiso de no usar datos para publicidad; en el MVP solo datos ficticios |
+| R6 | **Validez limitada de los resultados**: probar con datos ficticios no demuestra utilidad real | Alta | Medio | Declarar explícitamente la limitación (ver 5.A, U4) |
+
+> Probabilidades e impactos son **estimaciones iniciales** y se revisarán durante el proyecto.
+
+### 6.2 Supuestos por validar
+
+| ID | Supuesto | Cómo validarlo |
+|---|---|---|
+| SU-1 | Los estudiantes no registran sus gastos pequeños y no saben en qué gastan | Entrevistas exploratorias |
+| SU-2 | Usan apps bancarias, notas, Excel o memoria, y los abandonan por esfuerzo y tiempo | Entrevistas exploratorias |
+| SU-3 | Los gastos no planificados afectan sus metas financieras de forma relevante | Entrevistas exploratorias |
+| SU-4 | El segmento tiene interés suficiente en usar una app financiera con frecuencia | Entrevistas + prueba de prototipo |
+| SU-5 | Mantendrán el hábito si registrar es rápido y obtienen información útil | Solo validable a mediano plazo (F1, F2) |
+| SU-6 | Los resúmenes explicativos les resultan útiles | Parcialmente con U4; plenamente con datos reales en el futuro |
+| SU-7 | Están más dispuestos a probar la app al recibir su dinero | Entrevistas exploratorias |
+| SU-8 | Existe disposición a pagar S/ 5.00 mensuales por funciones avanzadas | Fuera del alcance del MVP |
+| SU-9 | La persona principal (sección 2.2) representa al usuario real | Entrevistas exploratorias |
+
+### 6.3 Plan de validación exploratoria **[Pendiente]**
+
+- **Meta:** 5 entrevistas exploratorias y 1 prueba de usabilidad con prototipo.
+- **Cuándo:** semanas 1 y 2 del proyecto.
+- **Temas:** cómo administran hoy su dinero, dificultades, uso de apps financieras, utilidad percibida.
+- **Estado:** sin entrevistas realizadas ni participantes confirmados.
+
+---
+
+## 7. Restricciones conocidas
+
+### 7.1 Equipo y plazo
+
+| Restricción | Origen |
+|---|---|
+| Equipo de **1 integrante** | Contexto del proyecto |
+| Plazo total de **6 semanas** | Objetivo académico de planificación |
+| Demostrar los **15 temas de la malla curricular** (desarrollo asistido por IA, especificaciones, arquitectura, pruebas, documentación, despliegue) | Requisito académico |
+| La revisión humana de los PR la hace el único integrante, que también es autor o supervisor del agente: **no es una revisión independiente** | Equipo de 1 persona (ADR-005, sección 6) |
+| Equipo de desarrollo: PC x64 con 8 GB de RAM, sin GPU | Recursos del integrante (ADR-004) |
+
+### 7.2 Tecnología
+
+| Componente | Elección | Origen |
+|---|---|---|
+| Base de datos | **Microsoft SQL Server Express** | **Requisito técnico obligatorio** |
+| Frontend | ASP.NET Core MVC, Razor Views, Bootstrap, JavaScript | Decisión del equipo |
+| Backend | ASP.NET Core con C# | Decisión del equipo |
+| ORM | Entity Framework Core | Decisión del equipo |
+| IA | Ollama con modelo local | Decisión del equipo |
+| Herramientas | Git, GitHub, GitHub Actions (con Docker solo en CI), xUnit, Playwright y demás herramientas de ADR-001 | Decisión del equipo |
+| Entorno local | SQL Server Express y Ollama (`qwen3:4b`) instalados de forma nativa | ADR-003, ADR-004 |
+
+> JavaScript se usa solo para interacción y validación del lado del cliente; nunca para calcular cifras oficiales (RN-027).
+
+### 7.3 Costos
+
+- No se usarán APIs de IA de pago.
+- No se usarán servicios de infraestructura con suscripción obligatoria.
+- Se priorizan herramientas gratuitas y recursos locales.
+
+### 7.4 Entorno de uso y despliegue **[Decisión]**
+
+- Aplicación **web responsive**, utilizable desde computadora y celular.
+- **Obligatorio:** acceso funcional desde un Android de gama media a los flujos principales (registro de gastos, presupuestos, dashboard).
+- **No obligatorio:** publicación en Internet o contratación de VPS durante las 6 semanas. El despliegue público queda para una fase posterior.
+- Desarrollo y demostración en entorno local y controlado, con prueba desde teléfono físico en red local.
+
+### 7.5 Datos y privacidad
+
+| Aspecto | Decisión / estado |
+|---|---|
+| Datos del MVP | **Solo datos financieros ficticios** para desarrollo, pruebas y demostraciones **[Decisión]** |
+| Pruebas con participantes | Cuentas de demostración y escenarios preparados; no se solicita información financiera real **[Decisión]** |
+| Identificación de participantes | Seudónimos (Participante 1, 2, 3…); se evita información personal innecesaria **[Decisión]** |
+| Marco legal | Ley N.° 29733, Ley de Protección de Datos Personales, y su reglamento vigente. Si se recopilan respuestas identificables: información al participante, consentimiento cuando proceda, acceso restringido y conservación limitada |
+| Consentimiento informado | **[Pendiente]** Confirmar si el diplomado exige un formato específico antes de entrevistas o pruebas |
+| Edad de participantes | Solo mayores de 18 años **[Decisión]** |
+
+---
+
+## Anexo — Pendientes abiertos
+
+Los pendientes de este documento (consentimiento informado, reclutamiento, entrevistas y metas de las métricas futuras) se gestionan en `05-preguntas-abiertas.md` (PQ-01 a PQ-04). Ninguno bloquea la implementación.
+
+---
+
+Alcance:
+---
+--- 02-alcance.md ---
+# 02 — Alcance del producto — ExpenseFlow AI
+
+| Campo | Valor |
+|---|---|
+| Documento | 02-alcance.md |
+| Fase | Discovery (BMAD — Agente PM) |
+| Insumos | `00-constitucion.md` v1.0, `01-project-brief.md` v1.0, ADR-001 a ADR-007 v1.0 |
+| Rol en `/docs` | **PRD** del MVP (PRINCIPIO-012): funcionalidades, prioridades, fuera de alcance, supuestos y flujos principales. Índice en `/docs/README.md` |
+| Versión | v1.0 |
+| Fecha | 2026-11-10 |
+| Estado | **Aprobado** |
+| Aprobado por | Piero Carbajal |
+| Fecha de aprobación | 2026-11-10 |
+| PR de aprobación | PR que fusiona el Spec Pack v1.0 en `main` (ADR-005 §1) |
+| Nota | Las **[Hipótesis]** siguen pendientes de validación con usuarios (`05-preguntas-abiertas.md`) |
+
+> **Convención** (igual que el Brief)
+> - **[Decisión]**: definido; no requiere validación para avanzar.
+> - **[Hipótesis]**: supuesto sin evidencia; debe validarse.
+> - **[Pendiente]**: información o decisión que falta confirmar.
+>
+> **Regla de este documento:** si una funcionalidad contradice la constitución, queda fuera del alcance, aunque aporte valor. Cualquier cambio a este alcance que toque un principio requiere ADR aprobado por un humano.
+>
+> **Formato de importes:** `S/ 1,250.50` (RN-081).
+>
+
+---
+
+## 0. Criterio de priorización
+
+El riesgo de mayor impacto es **R2: el alcance excede 6 semanas para 1 persona**. Por eso:
+
+- Un **Must** es algo sin lo cual el producto no cumple su propuesta de valor **o** no se pueden medir los KPI de los niveles A y B del Brief (U1–U4, T1–T4).
+- Todo lo que solo "mejora" la experiencia es **Should** o inferior.
+- Presupuesto de capacidad orientativo: **Must en semanas 1–4**, semanas 5–6 para estabilización, pruebas E2E, accesibilidad, documentación y pruebas de usabilidad. Los **Should solo se inician si los Must están terminados con CI en verde**.
+
+---
+
+## 1. IN-SCOPE
+
+### 1.1 Must have (MVP) — 6 funcionalidades
+
+| ID | Funcionalidad | Descripción (una frase) | Principios / KPI relacionados |
+|---|---|---|---|
+| M1 | **Cuenta y acceso seguro** | El usuario se registra con correo, contraseña y confirmación de la contraseña (ASP.NET Core Identity), declara ser mayor de 18 años, entra directamente a su dashboard, inicia y cierra sesión, y solo ve sus propios datos. | PRINCIPIO-007, PRINCIPIO-008, PRINCIPIO-009 · T2 |
+| M2 | **Registro rápido de gastos** | El usuario registra un gasto con monto, categoría predefinida, medio de pago (efectivo, Yape, Plin, tarjeta, otro) y fecha (hoy por defecto), y puede corregirlo o eliminarlo. | PRINCIPIO-003, PRINCIPIO-009 · U2, T1, T3 |
+| M3 | **Registro de ingresos** | El usuario registra el dinero que recibe con monto, origen (apoyo familiar, trabajo, prácticas preprofesionales, trabajo independiente, otros) y fecha, y puede corregirlo o eliminarlo. | PRINCIPIO-003 · T1, T3 |
+| M4 | **Presupuesto mensual** | El usuario define un monto límite de gasto para el mes en curso, que el sistema usa para calcular cuánto ha consumido y cuánto le queda. | PRINCIPIO-003, PRINCIPIO-004 · U3, T1 |
+| M5 | **Dashboard de situación** | Muestra el saldo del mes, el saldo acumulado, el restante del presupuesto, el gasto por categoría, el porcentaje de presupuesto consumido, los últimos movimientos y un aviso textual y visual al llegar al 80 % y al 100 % del presupuesto. | PRINCIPIO-004, PRINCIPIO-009, PRINCIPIO-012 · T1, T3, T4 |
+| M6 | **Resumen explicativo con IA** | A pedido del usuario, Ollama local redacta en español sencillo una explicación del mes en curso a partir de cifras ya calculadas por el backend y agregadas por categoría. | PRINCIPIO-004, PRINCIPIO-005 · U4 |
+
+**Notas sobre los Must**
+
+- **M1 — cuenta [Decisión, DEC-51, DEC-52]:** el formulario de registro tiene Correo, Contraseña, Confirmar contraseña y la casilla de mayoría de edad. El correo puede ser de cualquier dominio, con el formato de RN-150 (sin tildes, ñ ni símbolos distintos de punto, guion y guion bajo). Al crear la cuenta, el usuario entra directamente a su dashboard. Solo existen las pantallas de registro, inicio y cierre de sesión (RN-145), y no hay opción «Recordarme» (W20).
+- **M2 — velocidad:** el formulario de gasto tiene exactamente 4 campos (Monto, Categoría, Medio de pago, Fecha) y valores por defecto (fecha de hoy, medio de pago del último gasto creado) para cumplir U2 (≤ 15 s). Las categorías son **fijas** en el MVP: Alimentación, Transporte, Estudios, Entretenimiento, Salud, Otros **[Decisión]**.
+- **M2 — medio de pago:** es una **etiqueta descriptiva** ingresada manualmente; no implica conexión con Yape ni Plin (PRINCIPIO-009).
+- **M2, M3 — corrección y eliminación [Decisión]:** se hacen desde una **lista de movimientos paginada y sin filtros**, ordenada como los últimos movimientos del dashboard. No es S3: S3 añade filtros por fecha, categoría, tipo y medio de pago. La eliminación es definitiva y pide confirmación; no existe el concepto de «movimiento anulado».
+- **M3 — origen:** lista cerrada; con «Otros» se admite una descripción opcional de hasta 100 caracteres **[Decisión, DEC-13]**.
+- **M5 — avisos:** los umbrales de 80 % y 100 % los calcula el backend con reglas deterministas; el aviso no depende de la IA. El dashboard muestra la leyenda «Saldo calculado según tus registros» junto a cada saldo (PRINCIPIO-009).
+- **M5 — gráficos:** se usan barras de progreso de Bootstrap y tablas, **sin librería de gráficos**, para no requerir ADR (PRINCIPIO-002). Una librería de gráficos queda como Could (C4).
+- **M6 — por qué es Must:** desde el punto de vista del usuario, el producto funcionaría sin IA (el Brief lo reconoce en 3.4). Se clasifica como Must porque **sin ella no se puede medir U4 ni demostrar los temas de IA del diplomado**, que son criterio de éxito del proyecto. Para contener el riesgo:
+  - es **una sola** interacción: un resumen mensual bajo demanda (botón), no un chat;
+  - recibe solo datos agregados del mes en curso (`month`, `totalIncome`, `totalExpenses`, `monthlyBalance`, `budget`, `consumedPercentage`, `remainingBudget`, `overspentAmount`, `totalsByCategory`), nunca datos personales (PRINCIPIO-005);
+  - si Ollama no responde, el dashboard sigue funcionando y se muestra un mensaje de indisponibilidad (**degradación elegante**);
+  - el texto indica que es una explicación generada automáticamente y no asesoría financiera;
+  - el resumen se muestra **una sola vez** en el dashboard y no se guarda (RN-165) **[Decisión, DEC-54]**;
+  - si el texto contiene una cifra que no está en los datos agregados, se descarta y se muestra el mensaje de indisponibilidad (RN-166) **[Decisión, DEC-55]**.
+
+### 1.2 Should have — 5 funcionalidades (post-MVP, dentro de las 6 semanas solo si sobra capacidad)
+
+| ID | Funcionalidad | Descripción (una frase) |
+|---|---|---|
+| S1 | **Presupuesto por categoría** | El usuario reparte su presupuesto mensual entre categorías y ve el consumo de cada una por separado. |
+| S2 | **Periodo según la entrega de dinero** | El usuario elige si recibe su dinero cada 7 días, cada 15 días o una vez al mes, y la fecha de su última entrega; el sistema muestra el saldo del periodo «hasta la próxima entrega». Los presupuestos siguen siendo mensuales. |
+| S3 | **Historial con filtros** | El usuario filtra la lista de movimientos por rango de fechas, categoría, tipo y medio de pago. |
+| S4 | **Meta de ahorro simple** | El usuario define una meta (por ejemplo, «Laptop — S/ 2,500.00») y el sistema calcula el avance a partir de montos que él marca como ahorro. |
+| S5 | **Explicación de IA al alcanzar el umbral** | Cuando el backend detecta el 80 % de consumo, se ofrece una explicación breve de la IA sobre las categorías que más pesan, con las cifras ya calculadas. |
+
+> S2 responde mejor al momento detonante del Brief (3.3) que el presupuesto mensual fijo. Se deja como Should porque cambia el modelo de cálculo de periodos y multiplica los casos de prueba financieros (PRINCIPIO-011). Es el **primer candidato** a construir tras el MVP.
+
+### 1.3 Could have — 4 funcionalidades
+
+| ID | Funcionalidad | Descripción (una frase) |
+|---|---|---|
+| C1 | **Gastos frecuentes en un toque** | El usuario guarda plantillas («Pasaje — S/ 3.50») para registrarlas con un solo clic. |
+| C2 | **Categorías personalizadas** | El usuario crea, renombra o archiva sus propias categorías además de las predefinidas. |
+| C3 | **Exportación CSV** | El usuario descarga sus propios movimientos en un archivo CSV. |
+| C4 | **Gráficos visuales** | Gráficos de torta o de líneas sobre gasto por categoría y evolución mensual (requiere ADR por la librería, PRINCIPIO-002). |
+
+---
+
+## 2. OUT-OF-SCOPE (Won't have en esta versión)
+
+| ID | Funcionalidad | Razón por la que está fuera |
+|---|---|---|
+| W1 | Conexión con bancos o billeteras (BCP, Interbank, Yape, Plin, etc.) | Prohibido por PRINCIPIO-009. Además implicaría datos reales (PRINCIPIO-006) y dependencias externas. |
+| W2 | Pagos, transferencias, depósitos, retiros o inversiones | Prohibido por PRINCIPIO-009: el producto solo registra y analiza. |
+| W3 | Importación de estados de cuenta, PDF, Excel o lectura de vouchers (OCR) | PRINCIPIO-009 prohíbe leer estados de cuenta; PRINCIPIO-006 prohíbe datos reales; requeriría dependencias nuevas (PRINCIPIO-002). |
+| W4 | Registro o edición de movimientos mediante IA (chat «gasté 10 en menú», agente que crea gastos) | PRINCIPIO-004: la IA nunca crea, modifica ni elimina movimientos o presupuestos. |
+| W5 | Cálculos, proyecciones o pronósticos de gasto hechos por la IA | PRINCIPIO-004: toda cifra oficial la calcula el backend de forma determinista. |
+| W6 | Uso de proveedores de IA en la nube (OpenAI, Anthropic, Google, etc.), incluso como respaldo, o de un Ollama en otro equipo | PRINCIPIO-005 y ADR-002: solo Ollama en los hosts permitidos. También contradice la restricción de costo cero. |
+| W7 | Operación con datos reales o registro abierto al público | PRINCIPIO-006: requiere un ADR previo con evaluación de riesgos y obligaciones de la Ley N.° 29733. El formulario de registro existe solo en la aplicación local y advierte que no deben ingresarse datos reales (RN-099). |
+| W8 | Despliegue público en Internet (VPS, nube, dominio) | Brief 7.4: no obligatorio en 6 semanas; PRINCIPIO-010 prohíbe a los agentes desplegar; PRINCIPIO-006 lo hace innecesario. |
+| W9 | Multimoneda o conversión de divisas | PRINCIPIO-003: la única moneda es el sol (PEN). |
+| W10 | Interfaz multilingüe | PRINCIPIO-001: solo español (es-PE) en el MVP. |
+| W11 | App móvil nativa o PWA con modo offline | PRINCIPIO-002: el stack es web con Razor y Bootstrap; Brief 7.4 exige web responsive. |
+| W12 | Cuentas compartidas, familiares o de grupo | PRINCIPIO-007: cada usuario solo accede a sus propios datos; el aislamiento compartido multiplica el riesgo de T2. |
+| W13 | Inicio de sesión con Google, Facebook u otros proveedores externos | Dependencia externa y configuración de secretos de terceros; no aporta a los KPI del MVP. |
+| W14 | Notificaciones push, por correo o SMS | Requieren servicios externos (posible costo y secretos); el aviso en el dashboard (M5) cubre la necesidad. |
+| W15 | Monetización (freemium, suscripciones, publicidad, afiliaciones) | Brief 4.1 y 4.2: MVP gratuito; los datos no se usan para publicidad (PRINCIPIO-007). |
+| W16 | Asesoría financiera o de inversión personalizada | PRINCIPIO-009 y riesgo regulatorio; la IA solo explica la situación, no recomienda productos financieros. |
+| W17 | Recuperación de contraseña por correo **[Decisión]** | Requiere un servicio de correo (W14). Las cuentas demo se restablecen ejecutando el seed. |
+| W18 | Confirmación de correo electrónico **[Decisión]** | Requiere un servicio de correo (W14). Con datos ficticios no aporta seguridad. |
+| W19 | Gestión de cuenta: cambio de contraseña o de correo, eliminación de la cuenta, autenticación en dos pasos, descarga de datos personales | No aportan a los KPI del MVP; las cuentas son ficticias y las demo se restablecen con el seed. Sin correo (W17) no se podría recuperar el acceso tras un cambio de contraseña. |
+| W20 | Sesión persistente («Recordarme») | M1 no la incluye; mantener la sesión tras cerrar el navegador alarga la exposición de la cookie (RN-097, DEC-48). |
+
+---
+
+## 3. MVP — Qué puede hacer un usuario solo con los Must
+
+Un estudiante mayor de 18 años crea su cuenta declarando su mayoría de edad, entra directamente a su dashboard y vuelve a ingresar cuando lo necesita desde la computadora o desde su celular Android. El día en que recibe su dinero lo registra como ingreso y fija cuánto quiere gastar como máximo en el mes. Cada vez que paga algo, en efectivo, con Yape o con Plin, lo anota en pocos segundos indicando monto, categoría y medio de pago, y desde la lista de movimientos puede corregir o borrar lo que registró mal. En su dashboard ve en todo momento su saldo del mes y su saldo acumulado según sus registros, cuánto le queda de presupuesto, en qué categorías se le va más dinero y qué porcentaje de su presupuesto ya consumió, con un aviso claro cuando llega al 80 % y al 100 %. Cuando quiere entender su situación, pide un resumen y la IA local le explica en lenguaje sencillo, con las cifras ya calculadas por el sistema, cómo va su mes. Ninguno de sus datos es visible para otro usuario, y en esta versión todo funciona en local con cuentas y datos ficticios.
+
+### 3.1 Trazabilidad Must → KPI del Brief
+
+| KPI | M1 | M2 | M3 | M4 | M5 | M6 |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| U2 — Gasto en ≤ 15 s | | ✔ | | | | |
+| U3 — Presupuesto sin asistencia | | | | ✔ | | |
+| U4 — Comprensibilidad de la IA | | | | | | ✔ |
+| T1 — Exactitud de cálculos | | ✔ | ✔ | ✔ | ✔ | |
+| T2 — Aislamiento entre usuarios | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ |
+| T3 — Flujos completos E2E | ✔ | ✔ | ✔ | ✔ | ✔ | |
+| T4 — Uso desde Android | | ✔ | | ✔ | ✔ | |
+
+> Si una funcionalidad no aparece en esta tabla, no es Must. U1 (participantes) no depende de ninguna funcionalidad, sino del reclutamiento.
+
+### 3.2 Habilitadores técnicos (no son funcionalidades, pero son obligatorios)
+
+- Seed reproducible con 6 cuentas demo y escenarios fijos (`03-reglas-de-negocio.md`, sección 11) para pruebas y sesiones de usabilidad (PRINCIPIO-006).
+- API REST documentada en OpenAPI/Swagger (PRINCIPIO-012).
+- Pipeline de CI bloqueante con las condiciones de PRINCIPIO-011.
+- Pruebas E2E de la sección 3.3 como condición bloqueante del CI (PRINCIPIO-011, ADR-001).
+- Pruebas de accesibilidad WCAG 2.2 AA en todos los flujos principales de la sección 3.3 (PRINCIPIO-012).
+
+### 3.3 Flujos principales (lista única) **[Decisión]**
+
+Esta es la lista a la que remiten PRINCIPIO-011, PRINCIPIO-012 y los KPI T3 y T4. Cada flujo tiene una prueba E2E con Playwright y una revisión axe.
+
+| # | Flujo | Funcionalidad | T3 | T4 (Android) |
+|---|---|---|:-:|:-:|
+| F-01 | Registro de cuenta, inicio y cierre de sesión | M1 | ✔ | |
+| F-02 | Registrar un gasto | M2 | ✔ | ✔ |
+| F-03 | Corregir y eliminar un movimiento desde la lista | M2, M3 | ✔ | |
+| F-04 | Registrar un ingreso | M3 | ✔ | |
+| F-05 | Crear y editar el presupuesto del mes | M4 | ✔ | ✔ |
+| F-06 | Consultar el dashboard (con y sin presupuesto, con exceso) | M5 | ✔ | ✔ |
+| F-07 | Solicitar el resumen de IA (con Ollama simulado) | M6 | ✔ | |
+
+### 3.4 Entornos de ejecución **[Decisión]**
+
+| Entorno | Uso | Servicios | HTTPS | HSTS |
+|---|---|---|---|---|
+| `Development` | Desarrollo en el equipo del integrante | SQL Server Express y Ollama nativos | Sí, certificado de desarrollo de .NET | No |
+| `Testing` | Pruebas de integración y E2E en CI | SQL Server en Docker; IA simulada | Sí | Sí |
+| `Demo` | Sesiones de usabilidad y prueba T4 desde Android en red local | SQL Server Express y Ollama nativos, solo en `localhost` | Sí, certificado de `mkcert` instalado en el teléfono (ADR-001) | Sí |
+
+> Detalle completo en ADR-004, sección 4.
+
+---
+
+## 4. Supuestos
+
+### 4.1 De producto y usuario **[Hipótesis]** (heredados del Brief, sección 6.2: SU-1 a SU-9)
+
+| ID | Supuesto | Impacto en el alcance si resulta falso |
+|---|---|---|
+| SP1 | Los estudiantes no registran sus gastos pequeños y no saben en qué gastan (SU-1). | El problema central se debilita; habría que revisar la propuesta de valor. |
+| SP2 | Abandonan los métodos actuales por esfuerzo y tiempo (SU-2). | M2 dejaría de ser el diferenciador principal. |
+| SP3 | El momento de recibir el dinero es el mejor para empezar a usar la app (SU-7). | S2 (periodo según entrega) perdería prioridad. |
+| SP4 | Un presupuesto mensual único es suficiente para la primera versión. | Si las entrevistas muestran que la mayoría recibe dinero semanal, **S2 debe subir a Must** y algo debe bajar. |
+| SP5 | Seis categorías fijas cubren la mayoría de gastos del segmento. | C2 (categorías personalizadas) subiría de prioridad. |
+| SP6 | Una explicación en lenguaje natural resulta comprensible y aporta algo que los números solos no dan (SU-6). | M6 se reduciría a un requisito académico sin valor de producto. |
+| SP7 | La persona principal representa al usuario real (SU-9). | Revisión del alcance completo. |
+
+### 4.2 Técnicos y de ejecución **[Hipótesis]**
+
+| ID | Supuesto |
+|---|---|
+| ST1 | `qwen3:4b`, ejecutado en CPU con 8 GB de RAM, genera texto en español aceptable dentro del tiempo de espera de 30 s (RN-082, ADR-003). |
+| ST2 | Una sola persona puede completar M1–M6 con pruebas y CI en verde en unas 4 semanas, dejando 2 semanas para estabilización y validación. |
+| ST3 | Un navegador de Android de gama media puede acceder a la aplicación en red local por HTTPS en el entorno `Demo`, con un certificado de `mkcert` cuya CA se instala en el teléfono, sin incumplir PRINCIPIO-008. |
+| ST4 | Los minutos gratuitos de GitHub Actions alcanzan para el CI del proyecto, incluidas las pruebas E2E. |
+| ST5 | SQL Server Express funciona de forma nativa en el equipo de desarrollo y en Docker en el CI sin limitaciones relevantes para el volumen de datos ficticios. |
+
+---
+
+## 5. Restricciones
+
+### 5.1 De recursos
+
+| Restricción | Origen |
+|---|---|
+| Equipo de 1 persona | Brief 7.1 |
+| Plazo de 6 semanas | Brief 7.1 |
+| Costo cero: sin APIs de IA de pago ni infraestructura con suscripción | Brief 7.3 |
+| Evidenciar los 15 temas de la malla curricular | Brief 7.1 |
+
+### 5.2 Técnicas
+
+| Restricción | Origen |
+|---|---|
+| Stack de producto cerrado: ASP.NET Core MVC + Razor + Bootstrap 5, C# con API REST, EF Core, SQL Server Express, Identity, Ollama; monolito modular | PRINCIPIO-002 |
+| Paquetes del stack de producto y herramientas de desarrollo, prueba y CI: solo las de ADR-001 | PRINCIPIO-002, ADR-001 |
+| Toda tecnología o dependencia nueva requiere ADR aprobado por un humano | PRINCIPIO-002, PRINCIPIO-010 |
+| Montos en `decimal` / `DECIMAL(18,2)`, solo PEN, redondeo con modo explícito centralizado (`AwayFromZero`) | PRINCIPIO-003 |
+| Cálculos financieros solo en el backend y deterministas; la IA solo redacta | PRINCIPIO-004 |
+| IA exclusivamente local (hosts de ADR-002) con datos agregados y sin datos personales | PRINCIPIO-005 |
+| Código en inglés; documentación y UI en español (es-PE) | PRINCIPIO-001 |
+| HTTPS en todos los entornos, hasher de Identity, lockout habilitado, secretos fuera del repositorio | PRINCIPIO-008 |
+| CI bloqueante: formato, analizadores, pruebas unitarias, de integración y E2E, cobertura ≥ 80 % en la lógica de negocio, 100 % de reglas de cálculo, sin vulnerabilidades altas | PRINCIPIO-011 |
+| WCAG 2.2 AA, mobile-first, operable por teclado | PRINCIPIO-012 |
+| Ejecución en local; prueba desde Android físico en red local | Brief 7.4 |
+
+### 5.3 Legales y éticas
+
+| Restricción | Origen |
+|---|---|
+| Solo datos ficticios en desarrollo, pruebas y demostraciones | PRINCIPIO-006 |
+| Ley N.° 29733 y su reglamento: si se recogen respuestas identificables en entrevistas, informar, obtener consentimiento cuando proceda, restringir acceso y limitar conservación | Brief 7.5 |
+| Solo personas mayores de 18 años, con declaración obligatoria en el registro | PRINCIPIO-009, Brief 7.5 |
+| Participantes identificados con seudónimos | Brief 7.5 |
+| Los datos financieros no se usan para publicidad, venta ni entrenamiento de modelos | PRINCIPIO-007 |
+| La UI aclara que los saldos son calculados y no bancarios, y que el resumen de IA no es asesoría financiera | PRINCIPIO-009 |
+
+---
+
+## 6. Dependencias
+
+### 6.1 Técnicas
+
+| Dependencia | Uso | Riesgo / nota |
+|---|---|---|
+| **Ollama** + `qwen3:4b` | Generación del resumen de M6 | Modelo, licencia (Apache 2.0), solicitud y evaluaciones en ADR-003. Instalación nativa. El cliente se implementa con `HttpClient`, sin paquete NuGet. Hosts y configuración en ADR-002. |
+| **SQL Server Express** | Persistencia | Requisito obligatorio. Nativo en el equipo de desarrollo; en contenedor en el CI (ADR-004). |
+| **.NET 10 (LTS)** (ASP.NET Core, EF Core, Identity) | Aplicación y migraciones | Versión fijada en `global.json` (ADR-001). Los paquetes que materializan el stack (Identity con EF Core, proveedor de SQL Server, OpenAPI) y la herramienta `dotnet-ef` están listados en ADR-001. No se usa `Microsoft.AspNetCore.Identity.UI`. |
+| **Docker** | SQL Server para las pruebas de integración y E2E, **solo en el CI** | En el equipo de desarrollo no se usa, para dejar RAM al modelo (ADR-004). |
+| **GitHub + GitHub Actions** | Repositorio, PR y CI | Depende del plan gratuito (ST4). |
+| **NuGet / npm** | Obtención de paquetes | Solo paquetes de ADR-001 o de un ADR aprobado; versiones en `Directory.Packages.props`. |
+| **Bootstrap 5** | UI responsive | Servir localmente (no por CDN) para que funcione en red local sin Internet. |
+| **xUnit, Mvc.Testing, TimeProvider.Testing, coverlet, Playwright, axe** | Pruebas unitarias, integración, fecha fija, cobertura, E2E y accesibilidad | Aprobadas en ADR-001. |
+| **mkcert** | Certificado HTTPS para el entorno `Demo` | Herramienta local; el certificado no se versiona (ADR-001). |
+| **Teléfono Android de gama media** y red local | Verificación de T4 | Equipo físico disponible. |
+
+> Las herramientas de prueba y CI que exigen PRINCIPIO-011 y PRINCIPIO-012 están listadas en **ADR-001**.
+
+### 6.2 No técnicas
+
+| Dependencia | Uso | Estado |
+|---|---|---|
+| Al menos 5 estudiantes universitarios mayores de 18 años | Entrevistas exploratorias y pruebas de usabilidad (U1–U4) | **[Pendiente]** Sin participantes confirmados (`05` PQ-02). |
+| Formato de consentimiento informado del diplomado | Habilitar entrevistas y pruebas | **[Pendiente]** (`05` PQ-01). |
+| Revisor humano | Aprobación de ADR, PR y checklist de revisión (PRINCIPIO-010, PRINCIPIO-011) | Rol asumido por el integrante del equipo. |
+
+---
+
+## Anexo — Decisiones de este documento
+
+| # | Decisión | Estado |
+|---|---|---|
+| A1 | Herramientas de prueba y CI | **Cerrada:** ADR-001 |
+| A2 | Modelo de Ollama | **Cerrada:** `qwen3:4b` (ADR-003) |
+| A3 | HTTPS en red local para la prueba en Android (ST3) | **Cerrada:** entorno `Demo` + `mkcert` (ADR-001, ADR-004) |
+| A4 | Reclasificar S2 a Must si las entrevistas muestran que predomina la entrega semanal (SP4) | Abierta, no bloquea el MVP: `05-preguntas-abiertas.md`, PQ-05 |
+| A5 | Arquitectura, entornos y gobierno de cambios | **Cerrada:** ADR-004 y ADR-005 |
+
+---
+</contexto>
+
+<tarea>
+Genera un catálogo de reglas de negocio para las funcionalidades del in-scope
+(priorizando Must y Should).
+
+Cada regla debe seguir este formato EXACTO:
+
+---
+**RN-[NNN]** | Categoría: [categoría] | Prioridad: [MUST/SHOULD/COULD] | Fuente:
+[quién define]
+Patrón EARS: [Ubiquitous / Event-driven / State-driven / Unwanted / Optional]
+
+[Regla escrita en notación EARS con DEBE / NO DEBE / PUEDE]
+
+✅ **Ejemplo:** [caso concreto que cumple la regla, con valores]
+❌ **Contraejemplo:** [caso concreto que viola la regla, con valores]
+---
+
+Categorías sugeridas: Registro, Crédito, Pagos, Notificaciones, Seguridad, Datos, UX.
+
+Requisitos:
+- MÍNIMO 15 reglas
+- Cada regla es ATÓMICA: una sola idea. Si tiene "y", dividir en dos.
+- Valores concretos: montos en S/, tiempos en segundos, fechas en formato ISO.
+- Palabras normativas: DEBE (obligatorio), NO DEBE (prohibido), PUEDE (opcional).
+- Cada regla DEBE tener ejemplo y contraejemplo con valores reales.
+
+Al final, genera también:
+- Un GLOSARIO con mínimo 15 términos del dominio (lenguaje ubicuo).
+</tarea>
+
+<restricciones>
+- NO uses adjetivos vagos: "rápido", "seguro", "fácil", "adecuado", "razonable".
+- NO escribas reglas compuestas (más de una condición → más de una regla).
+- Respeta la constitución: tus reglas no pueden contradecirla.
+- Si necesitas más información para escribir una regla, PREGUNTA antes de asumir.
+</restricciones>
+
+<formato>
+Catálogo en Markdown para 03-reglas-de-negocio.md y glosario para 04-glosario.md.
+</formato>
+]]></prompt>
+  </paso>
+  <salida archivo="docs/04-glosario.md" estado="Aprobado" aprobado_por="Piero Carbajal" fecha_aprobacion="2026-11-10"/>
+</ejecucion_bmad>

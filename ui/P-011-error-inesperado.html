@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Algo salió mal — ExpenseFlow AI</title>
+<style>
+:root{
+  color-scheme: light;
+  --ef-color-primary:#0B5C8A; --ef-color-primary-hover:#084A6F; --ef-primary-subtle:#E8F2F9;
+  --ef-color-secondary:#475467; --ef-color-accent:#0F6E5C;
+  --ef-color-bg:#F5F7FA; --ef-color-surface:#FFFFFF; --ef-color-text:#1A1F29; --ef-color-text-muted:#4B5565;
+  --ef-color-border:#6B7280; --ef-color-divider:#E4E8EE; --ef-color-danger:#B42318;
+  --ef-danger-bg:#FEF0EE; --ef-danger-text:#912018; --ef-warning-bg:#FFF4E0; --ef-warning-text:#7A3E00;
+  --ef-success-bg:#ECF7EF; --ef-success-text:#1F6E37; --ef-info-bg:#E8F2F9; --ef-info-text:#0B4F75;
+  --ef-progress-normal:#0B5C8A; --ef-progress-warning:#B45309; --ef-progress-danger:#B42318;
+  --ef-focus-ring:0 0 0 3px #FFFFFF, 0 0 0 6px #0B5C8A;
+  --ef-radius:.5rem; --ef-radius-sm:.25rem;
+  --ef-space-1:4px; --ef-space-2:8px; --ef-space-3:12px; --ef-space-4:16px; --ef-space-5:24px; --ef-space-6:32px;
+  --ef-font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{font-size:16px}
+body{margin:0;font-family:var(--ef-font-family);background:var(--ef-color-bg);color:var(--ef-color-text);line-height:1.5}
+a{color:var(--ef-color-primary)} a:hover{color:var(--ef-color-primary-hover)}
+:focus-visible{outline:none;box-shadow:var(--ef-focus-ring);border-radius:4px}
+.ef-amount,.tabular{font-variant-numeric:tabular-nums}
+.visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+
+/* Barra del prototipo (fuera de la aplicación) */
+.proto-bar{background:#1A1F29;color:#fff;font-size:.8125rem;padding:8px 12px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.proto-bar strong{color:#FFD58A}
+.proto-bar label{display:flex;gap:6px;align-items:center}
+.proto-bar select,.proto-bar button{font:inherit;font-size:.8125rem;padding:4px 8px;border-radius:4px;border:1px solid #6B7280;background:#2B3240;color:#fff;min-height:32px}
+.proto-bar a{color:#9FD3F5}
+.proto-state{display:flex;gap:4px;flex-wrap:wrap}
+.proto-state button[aria-pressed="true"]{background:#0B5C8A;border-color:#9FD3F5}
+
+.skip{position:absolute;left:8px;top:-60px;background:#fff;color:var(--ef-color-primary);padding:8px 12px;z-index:10;border-radius:4px}
+.skip:focus{top:8px}
+.ef-header{background:var(--ef-color-primary);color:#fff;position:static}
+.ef-header__inner{max-width:1140px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;padding:8px 16px;min-height:56px;gap:12px}
+.ef-brand{color:#fff;text-decoration:none;font-weight:700;font-size:1.125rem}
+.ef-brand:hover{color:#fff}
+.ef-nav{background:var(--ef-color-surface);border-bottom:1px solid var(--ef-color-divider)}
+.ef-nav ul{list-style:none;margin:0 auto;padding:0;display:flex;max-width:1140px}
+.ef-nav li{flex:1}
+.ef-nav a{display:flex;align-items:center;justify-content:center;min-height:48px;text-decoration:none;color:var(--ef-color-text);border-bottom:3px solid transparent}
+.ef-nav a[aria-current="page"]{font-weight:700;border-bottom-color:var(--ef-color-primary)}
+@media (min-width:768px){
+  .ef-header--auth .ef-header__inner{display:grid;grid-template-columns:auto 1fr auto}
+  .ef-nav--inline{background:transparent;border:0}
+  .ef-nav--inline ul{justify-content:center;gap:8px}
+  .ef-nav--inline li{flex:none}
+  .ef-nav--inline a{color:#fff;padding:0 16px;border-bottom-color:transparent}
+  .ef-nav--inline a[aria-current="page"]{border-bottom-color:#fff}
+  .ef-nav--mobile{display:none}
+}
+@media (max-width:767.98px){.ef-nav--inline{display:none}}
+main{max-width:1140px;margin:0 auto;padding:16px}
+.ef-footer{max-width:1140px;margin:24px auto 0;padding:16px;color:var(--ef-color-text-muted);font-size:.875rem;border-top:1px solid var(--ef-color-divider)}
+.ef-public main{max-width:472px}
+.card{background:var(--ef-color-surface);border-radius:var(--ef-radius);box-shadow:0 1px 2px rgba(16,24,40,.08);padding:24px;margin-bottom:16px}
+.ef-form{max-width:560px;margin:0 auto}
+h1{font-size:1.5rem;font-weight:700;margin:0 0 12px}
+h2{font-size:1.125rem;font-weight:600;margin:0 0 12px}
+h3{font-size:1rem;font-weight:600;margin:0}
+@media (min-width:768px){h1{font-size:1.75rem}h2{font-size:1.25rem}}
+.muted{color:var(--ef-color-text-muted);font-size:.875rem}
+
+/* Botones */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:inherit;font-weight:600;min-height:48px;padding:0 16px;border-radius:var(--ef-radius);border:1px solid transparent;cursor:pointer;text-decoration:none}
+.btn-primary{background:var(--ef-color-primary);color:#fff;border-color:var(--ef-color-primary)}
+.btn-primary:hover{background:var(--ef-color-primary-hover);color:#fff}
+.btn-outline{background:#fff;color:var(--ef-color-primary);border-color:var(--ef-color-primary)}
+.btn-outline-light{background:transparent;color:#fff;border-color:#fff;min-height:44px}
+.btn-secondary{background:#fff;color:var(--ef-color-secondary);border-color:var(--ef-color-border)}
+.btn-danger{background:var(--ef-color-danger);color:#fff;border-color:var(--ef-color-danger)}
+.btn-outline-danger{background:#fff;color:var(--ef-color-danger);border-color:var(--ef-color-danger)}
+.btn-sm{min-height:44px;min-width:44px;padding:0 12px;font-size:.9375rem}
+.btn-block{width:100%}
+.btn-xl{min-height:56px}
+.btn[disabled],.btn[aria-disabled="true"]{opacity:.65;cursor:not-allowed}
+.spinner{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.link-center{display:block;text-align:center;margin-top:12px;min-height:44px;line-height:44px}
+.row-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.row-actions .btn{padding:0 8px;white-space:nowrap;font-size:.9375rem}
+
+/* Campos (CMP-03) */
+.ef-field{margin-bottom:20px}
+.ef-field label,.ef-legend{display:block;font-weight:600;margin-bottom:6px}
+.form-control{width:100%;min-height:48px;font:inherit;font-size:1rem;padding:8px 12px;border:1px solid var(--ef-color-border);border-radius:var(--ef-radius);background:#fff;color:var(--ef-color-text)}
+.form-control[aria-invalid="true"]{border:2px solid var(--ef-color-danger)}
+.ef-help{margin:6px 0 0;font-size:.875rem;color:var(--ef-color-text-muted)}
+.ef-error{margin:6px 0 0;color:var(--ef-color-danger);font-size:.9375rem;display:flex;gap:6px;align-items:flex-start}
+.ef-error svg,.alert svg{flex:none;margin-top:3px}
+.input-group{display:flex}
+.input-group-text{display:flex;align-items:center;padding:0 12px;border:1px solid var(--ef-color-border);border-right:0;border-radius:var(--ef-radius) 0 0 var(--ef-radius);background:var(--ef-color-bg);font-weight:600}
+.input-group .form-control{border-radius:0 var(--ef-radius) var(--ef-radius) 0;min-height:56px;font-size:1.25rem}
+.check{display:flex;gap:12px;align-items:center;min-height:44px;cursor:pointer}
+.check input{width:24px;height:24px;margin:0}
+fieldset{border:0;margin:0 0 20px;padding:0}
+legend{font-weight:600;margin-bottom:6px;padding:0}
+
+/* Mosaicos (CMP-06) */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tiles--3{grid-template-columns:repeat(3,1fr)}
+.tiles--1{grid-template-columns:1fr}
+@media (min-width:576px){.tiles{grid-template-columns:repeat(3,1fr)}.tiles--1{grid-template-columns:1fr}}
+@media (min-width:768px){.tiles--pay{grid-template-columns:repeat(5,1fr)}}
+.ef-field label.ef-choice{display:flex;align-items:center;gap:8px;min-height:56px;margin:0;padding:8px 10px;border:1px solid var(--ef-color-border);border-radius:var(--ef-radius);background:#fff;cursor:pointer;font-weight:400;font-size:.9375rem;overflow-wrap:break-word;hyphens:auto;min-width:0}
+.ef-field label.check{display:flex;font-weight:400}
+@media (max-width:575.98px){.card{padding:16px}}
+.ef-choice input{width:18px;height:18px;margin:0;flex:none}
+.ef-field label.ef-choice:has(input:checked){border:2px solid var(--ef-color-primary);background:var(--ef-primary-subtle);font-weight:600}
+.ef-choice:has(:focus-visible){box-shadow:var(--ef-focus-ring)}
+.ef-choice input:focus-visible{box-shadow:none}
+
+/* Avisos */
+.alert{display:flex;gap:8px;padding:12px 14px;border-radius:var(--ef-radius);border-left:4px solid;margin-bottom:16px;font-weight:600}
+.alert-danger{background:var(--ef-danger-bg);color:var(--ef-danger-text);border-color:var(--ef-danger-text)}
+.alert-warning{background:var(--ef-warning-bg);color:var(--ef-warning-text);border-color:var(--ef-warning-text)}
+.alert-info{background:var(--ef-info-bg);color:var(--ef-info-text);border-color:var(--ef-info-text);font-weight:400}
+.alert-success{background:var(--ef-success-bg);color:var(--ef-success-text);border-color:var(--ef-success-text)}
+.alert a{color:inherit}
+.ef-error-summary{background:var(--ef-danger-bg);color:var(--ef-danger-text);border-left:4px solid var(--ef-danger-text);border-radius:var(--ef-radius);padding:12px 14px;margin-bottom:16px}
+.ef-error-summary p{margin:0 0 6px;font-weight:600}
+.ef-error-summary ul{margin:0;padding-left:20px}
+.ef-error-summary a{color:var(--ef-danger-text)}
+.msg-small{font-size:.875rem;color:var(--ef-color-text-muted);margin:16px 0 12px}
+
+/* Dashboard */
+.grid-dash{display:grid;gap:16px}
+@media (min-width:992px){
+  .grid-dash{grid-template-columns:5fr 7fr}
+  .grid-dash .span-all{grid-column:1/-1}
+  .dash-head{display:grid;grid-template-columns:8fr 4fr;align-items:center;gap:16px}
+}
+.dash-head .row-actions{margin:0}
+.saldo{font-size:1.125rem;font-weight:600;margin:0}
+.saldo .ef-amount{display:block;font-size:1.75rem;font-weight:700}
+@media (min-width:768px){.saldo .ef-amount{font-size:2rem}}
+.saldo2 .ef-amount{font-size:1.25rem;font-weight:700}
+.negativo{color:var(--ef-color-danger)}
+hr.div{border:0;border-top:1px solid var(--ef-color-divider);margin:12px 0}
+dl.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin:0 0 12px}
+dl.kv dt{color:var(--ef-color-text)} dl.kv dd{margin:0;text-align:right;font-weight:600}
+.ef-progress{height:16px;background:var(--ef-color-divider);border:1px solid var(--ef-color-border);border-radius:8px;overflow:hidden;margin-bottom:12px}
+.ef-progress>div{height:100%}
+.cat-list{list-style:none;margin:0;padding:0}
+.cat-list li{display:flex;justify-content:space-between;min-height:48px;align-items:center;border-bottom:1px solid var(--ef-color-divider)}
+.ai-result{border-left:4px solid var(--ef-color-accent);padding:4px 0 4px 12px;margin-bottom:12px}
+.ai-text{white-space:pre-line;line-height:1.6;margin:8px 0}
+.empty{text-align:center;padding:24px 8px;color:var(--ef-color-text-muted)}
+
+/* Fila de movimiento (CMP-07) */
+.tx-list{list-style:none;margin:0;padding:0}
+.ef-tx{border-bottom:1px solid var(--ef-color-divider);min-height:56px;padding:8px 0}
+.ef-tx__main{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px}
+.ef-tx__amount{font-weight:600;margin-left:auto}
+.badge{display:inline-block;background:var(--ef-color-secondary);color:#fff;border-radius:var(--ef-radius-sm);padding:0 6px;font-size:.8125rem;font-weight:600}
+.ef-tx__actions{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+details.ef-delete>summary{list-style:none}
+details.ef-delete>summary::-webkit-details-marker{display:none}
+.ef-delete__panel{flex-basis:100%;background:var(--ef-danger-bg);border-radius:var(--ef-radius);padding:12px;margin-top:8px}
+@media (min-width:576px){.ef-tx{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.ef-tx__main{flex:1}.ef-tx__actions{margin-top:0}}
+
+/* Paginación (CMP-12) */
+.pager{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:8px}
+.pager p{margin:0}
+
+/* Diálogo (CMP-11) */
+dialog{border:0;border-radius:var(--ef-radius);padding:24px;width:calc(100% - 32px);max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+dialog::backdrop{background:rgba(16,24,40,.55)}
+.dlg-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+
+/* Carga */
+.skel{background:linear-gradient(90deg,#E4E8EE 25%,#F0F2F5 50%,#E4E8EE 75%);background-size:200% 100%;animation:sk 1.2s infinite;border-radius:6px;height:18px;margin:10px 0}
+@keyframes sk{to{background-position:-200% 0}}
+.draft{border:2px dashed var(--ef-progress-warning);background:var(--ef-warning-bg);color:var(--ef-warning-text);padding:10px 12px;border-radius:var(--ef-radius);margin-bottom:16px;font-size:.9375rem}
+.error-code{font-variant-numeric:tabular-nums;color:var(--ef-color-text-muted)}
+</style>
+</head>
+<body class="ef-public">
+<div class="proto-bar" role="region" aria-label="Controles del prototipo">
+  <span><strong>Prototipo P-011</strong> · no es código de producción · hoy simulado: 08/11/2026</span>
+  <span>Estado: <span id="proto-states" class="proto-state"></span></span>
+  
+  <a href="index.html">Todas las pantallas</a>
+</div>
+<a class="skip" href="#contenido">Saltar al contenido principal</a>
+<header class="ef-header"><div class="ef-header__inner"><span class="ef-brand">ExpenseFlow AI</span></div></header>
+<main id="contenido">
+
+<div class="card"><h1>Algo salió mal</h1><p>Ocurrió un error inesperado. Inténtalo nuevamente en unos minutos.</p><p class="error-code">Código de error: 500</p><a class="btn btn-primary btn-block" href="P-003-dashboard.html">Volver al inicio</a></div>
+</main>
+<footer class="ef-footer">Aplicación académica con datos ficticios. Los saldos son calculados según tus registros.</footer>
+<script>
+const MSG = {"MSG-01": "Debes declarar que eres mayor de 18 años para crear tu cuenta.", "MSG-02": "No se pudo iniciar sesión. Verifica tu correo y contraseña, o inténtalo de nuevo en unos minutos.", "MSG-03": "La contraseña debe tener al menos 8 caracteres, con una mayúscula, una minúscula, un número y un símbolo.", "MSG-04": "Ya existe una cuenta con este correo.", "MSG-05": "Versión académica de demostración. No ingreses datos personales ni financieros reales.", "MSG-06": "Ingresa el monto solo con números y, si tiene decimales, un punto o una coma (por ejemplo, 12.50 o 12,50).", "MSG-07": "El monto debe ser mayor que cero.", "MSG-08": "El monto no puede superar S/ 100,000.00.", "MSG-09": "El monto debe tener como máximo dos decimales.", "MSG-10": "La fecha no puede ser posterior a hoy.", "MSG-11": "Ingresa el monto.", "MSG-12": "Selecciona una categoría.", "MSG-13": "Selecciona un medio de pago.", "MSG-14": "Selecciona el origen del ingreso.", "MSG-15": "La descripción puede tener como máximo 100 caracteres.", "MSG-16": "Ingresa la fecha.", "MSG-17": "La fecha no puede ser anterior al {fecha mínima en dd/MM/yyyy}.", "MSG-18": "¿Eliminar este movimiento? Esta acción no se puede deshacer.", "MSG-19": "El presupuesto debe ser mayor que cero.", "MSG-20": "El presupuesto no puede superar S/ 100,000.00.", "MSG-21": "Ya tienes un presupuesto para este mes. Puedes cambiarlo desde «Editar presupuesto».", "MSG-22": "Solo puedes crear o editar el presupuesto del mes en curso.", "MSG-23": "El análisis con inteligencia artificial no está disponible en este momento. Inténtalo nuevamente.", "MSG-24": "El análisis con inteligencia artificial no está configurado en esta instalación.", "MSG-25": "Ingresa el monto del presupuesto.", "MSG-26": "Este campo no corresponde a este tipo de movimiento.", "MSG-27": "El valor no está permitido.", "MSG-28": "La fecha debe tener el formato aaaa-mm-dd.", "MSG-29": "La página debe ser un número entero mayor o igual que 1.", "MSG-30": "El tipo de un movimiento no se puede cambiar.", "MSG-31": "No hay más movimientos.", "MSG-32": "Ingresa tu correo.", "MSG-33": "Ingresa un correo válido, por ejemplo, nombre@dominio.com. Usa solo letras sin tildes ni ñ, números, punto, guion o guion bajo.", "MSG-34": "Ingresa tu contraseña.", "MSG-35": "Las contraseñas no coinciden.", "MSG-36": "Confirma tu contraseña.", "MSG-37": "El correo puede tener como máximo 256 caracteres.", "MSG-38": "La solicitud no tiene un formato JSON válido.", "MSG-39": "El monto debe ser un número.", "MSG-40": "Ocurrió un error inesperado. Inténtalo nuevamente en unos minutos.", "MSG-41": "Aún no tienes movimientos registrados.", "MSG-42": "Aún no tienes gastos registrados este mes.", "MSG-43": "Selecciona el tipo de movimiento.", "MSG-44": "Revisa los datos ingresados.", "MSG-45": "La página que buscas no existe.", "MSG-46": "Tu formulario caducó. Vuelve a la página e inténtalo de nuevo.", "MSG-47": "Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo.", "MSG-48": "Tu sesión terminó. Inicia sesión para continuar.", "MSG-49": "Gasto guardado.", "MSG-50": "Ingreso guardado.", "MSG-51": "Cambios guardados.", "MSG-52": "Movimiento eliminado.", "MSG-53": "Presupuesto guardado."};
+const HOY = new Date(2026, 10, 8); // hoy simulado (hora de Lima): 08/11/2026, como en las HU
+const VENTANA_INI = new Date(2025, 11, 1); // RN-109: primer día del mes 11 meses antes
+const ICON_WARN = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M8 1 15 14H1L8 1Zm-.8 5v4h1.6V6H7.2Zm0 5v1.6h1.6V11H7.2Z"/></svg>', ICON_OK='<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path fill="currentColor" d="M6.3 11.6 2.7 8l1.1-1.1 2.5 2.5 5.9-5.9 1.1 1.1-7 7Z"/></svg>', ICON_INFO='<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path fill="currentColor" d="M7.2 7h1.6v5H7.2zM7.2 4h1.6v1.6H7.2z"/></svg>';
+function $(s,r=document){return r.querySelector(s)} function $$(s,r=document){return [...r.querySelectorAll(s)]}
+function fmt(n){const neg=n<0; const a=Math.abs(n).toFixed(2).split('.'); a[0]=a[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return (neg?'-':'')+'S/ '+a.join('.');}
+function pct(n){return n.toFixed(2)+' %'}
+function ddmmyyyy(d){return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()}
+function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function msg17(){return MSG['MSG-17'].replace('{fecha mínima en dd/MM/yyyy}', ddmmyyyy(VENTANA_INI))}
+// RN-104: validación del monto escrito
+function parseAmount(raw, budget){
+  const t=(raw||'').trim();
+  if(!t) return {err: budget?'MSG-25':'MSG-11'};
+  if(!/^[0-9]+([.,][0-9]+)?$/.test(t)) return {err:'MSG-06'};
+  const [ent,dec='']=t.split(/[.,]/);
+  if(ent.replace(/^0+/,'').length>6) return {err: budget?'MSG-20':'MSG-08'};
+  if(dec.replace(/0+$/,'').length>2) return {err:'MSG-09'};
+  const v=Number(ent+'.'+(dec||'0'));
+  if(v<=0) return {err: budget?'MSG-19':'MSG-07'};
+  if(v>100000) return {err: budget?'MSG-20':'MSG-08'};
+  return {value:Math.round(v*100)/100};
+}
+function m(id){return id==='MSG-17'?msg17():MSG[id]}
+// CMP-03 / CMP-04: errores de campo, resumen y foco
+function clearErrors(form){
+  $$('.ef-error',form).forEach(e=>e.remove());
+  $$('[aria-invalid]',form).forEach(e=>e.removeAttribute('aria-invalid'));
+  $$('[data-err-for]',form).forEach(e=>{const ids=(e.getAttribute('aria-describedby')||'').split(' ').filter(x=>!x.endsWith('-error'));ids.length?e.setAttribute('aria-describedby',ids.join(' ')):e.removeAttribute('aria-describedby')});
+  const s=$('.ef-error-summary',form); if(s) s.remove();
+  const a=$('.form-alert',form); if(a) a.remove();
+}
+function showErrors(form, errs){ // errs: [{field:'Email', msg:'MSG-32'}]
+  clearErrors(form); if(!errs.length) return;
+  const items=[];
+  errs.forEach(e=>{
+    const host=form.querySelector(`[data-field="${e.field}"]`); if(!host) return;
+    const ctrl=host.matches('[data-err-for]')?host:host.querySelector('[data-err-for]');
+    const p=document.createElement('p'); p.className='ef-error'; p.id=e.field+'-error'; p.innerHTML=ICON_WARN+'<span>'+esc(m(e.msg))+'</span>';
+    host.appendChild(p);
+    if(ctrl){ctrl.setAttribute('aria-invalid','true'); const d=(ctrl.getAttribute('aria-describedby')||'').split(' ').filter(Boolean); d.push(p.id); ctrl.setAttribute('aria-describedby',d.join(' '));}
+    items.push(`<li><a href="#${host.dataset.anchor||e.field}">${esc(m(e.msg))}</a></li>`);
+  });
+  const sum=document.createElement('div'); sum.className='ef-error-summary'; sum.setAttribute('role','alert');
+  sum.innerHTML=`<p>${ICON_WARN} ${esc(MSG['MSG-44'])}</p><ul>${items.join('')}</ul>`;
+  form.prepend(sum);
+  const first=form.querySelector('[aria-invalid="true"]'); if(first){ (first.tagName==='FIELDSET'?first.querySelector('input'):first).focus(); }
+}
+function formAlert(form, html, cls='alert-danger', role='alert'){ // errores que no son de un campo (DEC-80)
+  const a=document.createElement('div'); a.className='alert '+cls+' form-alert'; a.setAttribute('role',role); a.innerHTML=(cls==='alert-info'?ICON_INFO:ICON_WARN)+'<span>'+html+'</span>'; form.prepend(a);
+}
+// CMP-10: botón con estado «enviando»
+function submitting(btn, on){
+  if(on){btn.dataset.idle=btn.innerHTML; btn.disabled=true; btn.setAttribute('aria-disabled','true'); btn.innerHTML='<span class="spinner" aria-hidden="true"></span>'+esc(btn.dataset.submittingText||'Guardando…');
+    const live=btn.form&&btn.form.querySelector('[data-live]'); if(live) live.textContent=btn.dataset.submittingText||'Guardando…';}
+  else{btn.disabled=false; btn.removeAttribute('aria-disabled'); if(btn.dataset.idle) btn.innerHTML=btn.dataset.idle; const live=btn.form&&btn.form.querySelector('[data-live]'); if(live) live.textContent='';}
+}
+function go(url, ok){ location.href = url + (ok ? (url.includes('?')?'&':'?')+'ok='+ok : ''); }
+// RN-172: confirmación una sola vez
+function flash(){
+  const q=new URLSearchParams(location.search); const ok=q.get('ok'); if(!ok||!MSG[ok]) return;
+  const mainEl=$('main'); const d=document.createElement('div'); d.className='alert alert-success'; d.setAttribute('role','status');
+  d.innerHTML=ICON_OK+'<span>'+esc(MSG[ok])+'</span>'; mainEl.prepend(d);
+  q.delete('ok'); history.replaceState(null,'',location.pathname+(q.toString()?'?'+q:''));
+}
+// Barra del prototipo: estados
+function protoStates(states, onChange, initial){
+  const box=$('#proto-states'); if(!box) return;
+  box.innerHTML=states.map(([k,l])=>`<button type="button" data-k="${k}" aria-pressed="false">${l}</button>`).join('');
+  const set=k=>{$$('button',box).forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===k)); onChange(k);};
+  box.addEventListener('click',e=>{const b=e.target.closest('button'); if(b) set(b.dataset.k)});
+  set(initial||states[0][0]);
+}
+window.addEventListener('pageshow',e=>{ if(e.persisted) $$('button[disabled][data-idle]').forEach(b=>submitting(b,false)); });
+
+protoStates([['datos','Página']],()=>{});
+flash();
+</script>
+</body>
+</html>
